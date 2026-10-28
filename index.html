@@ -79,6 +79,45 @@
       </section>
 
       <section class="panel fade-item">
+        <h2 class="panel-title">Пресеты</h2>
+        <form id="preset-form" class="preset-form" autocomplete="off">
+          <input id="preset-name" class="player-input" type="text" placeholder="Название пресета" maxlength="60">
+          <button type="submit" class="preset-btn primary">Сохранить как новый</button>
+        </form>
+
+        <div class="formation-row">
+          <select id="formation-select" class="player-input player-select" title="Готовая схема расстановки">
+            <option value="">Схема расстановки</option>
+            <option value="4-4-2">4-4-2</option>
+            <option value="4-3-3">4-3-3</option>
+            <option value="3-5-2">3-5-2</option>
+            <option value="4-2-3-1">4-2-3-1</option>
+            <option value="5-3-2">5-3-2</option>
+          </select>
+          <button id="btn-apply-formation" class="preset-btn" type="button" title="Расставить основной состав по выбранной схеме">Расставить</button>
+        </div>
+
+        <div class="preset-actions-row">
+          <button id="btn-load-preset" class="preset-btn" type="button" disabled>Загрузить</button>
+          <button id="btn-overwrite-preset" class="preset-btn" type="button" disabled>Перезаписать</button>
+          <button id="btn-rename-preset" class="preset-btn" type="button" disabled>Переименовать</button>
+          <button id="btn-duplicate-preset" class="preset-btn" type="button" disabled>Дублировать</button>
+          <button id="btn-delete-preset" class="preset-btn danger" type="button" disabled>Удалить</button>
+        </div>
+
+        <ul class="preset-list" id="preset-list"></ul>
+        <p class="preset-empty" id="preset-empty" hidden>Пока нет пресетов</p>
+
+        <div class="preset-export-row">
+          <button id="btn-export-presets" class="preset-btn" type="button" title="Скачать выбранный пресет, а если он не выбран — все пресеты">Экспорт</button>
+          <button id="btn-import-presets" class="preset-btn" type="button" title="Загрузить пресеты из JSON-файла">Импорт</button>
+          <input id="file-import-presets" type="file" accept=".json,application/json" hidden>
+        </div>
+
+        <p class="preset-msg" id="preset-msg" hidden></p>
+      </section>
+
+      <section class="panel fade-item">
         <h2 class="panel-title">Действия</h2>
         <div class="tool-grid">
           <button class="tool-btn" data-action="clear" title="Очистить поле">Очистить</button>
@@ -96,7 +135,7 @@
       </section>
 
       <footer class="sidebar-footer fade-item">
-        Этап 3 · Игроки на поле
+        Этап 5 · Пресеты и схемы расстановки
       </footer>
     </aside>
 

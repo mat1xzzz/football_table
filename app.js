@@ -706,7 +706,7 @@ btnMenu.addEventListener('click', function () {
     label.hidden = !name;
   }
 
-  function showToken(p) {
+  function showToken(p, delay) {
     if (!p || !p.pos) return;
     var el = tokenEls[p.id];
     if (!el) {
@@ -723,6 +723,7 @@ btnMenu.addEventListener('click', function () {
         scale: [0, 1],
         opacity: [0, 1],
         duration: 900,
+        delay: delay || 0,
         easing: 'easeOutElastic'
       });
     } else {
@@ -1060,6 +1061,551 @@ btnMenu.addEventListener('click', function () {
   loadPlayers();
   renderAllPlayers();
 
+  /* ── Пресеты и схемы расстановки ──────────── */
+
+  var PRESETS_KEY = 'fb-board-presets-v1';
+  var CURRENT_PRESET_KEY = 'fb-board-current-preset';
+
+  /* Линии схем: вратарь, защита, полузащита, атака и т.д.
+     Своя половина — левая половина поля (координаты 0–1). */
+  var FORMATIONS = {
+    '4-4-2': [1, 4, 4, 2],
+    '4-3-3': [1, 4, 3, 3],
+    '3-5-2': [1, 3, 5, 2],
+    '4-2-3-1': [1, 4, 2, 3, 1],
+    '5-3-2': [1, 5, 3, 2]
+  };
+
+  var presets = [];        /* { id, name, savedAt, orientation, colors, players } */
+  var currentPresetId = null; /* последний загруженный пресет */
+  var selectedPresetId = null; /* выбранный в списке пресет */
+
+  var presetForm = document.getElementById('preset-form');
+  var presetNameInput = document.getElementById('preset-name');
+  var formationSelect = document.getElementById('formation-select');
+  var btnApplyFormation = document.getElementById('btn-apply-formation');
+  var presetListEl = document.getElementById('preset-list');
+  var presetEmptyEl = document.getElementById('preset-empty');
+  var presetMsgEl = document.getElementById('preset-msg');
+  var btnExportPresets = document.getElementById('btn-export-presets');
+  var btnImportPresets = document.getElementById('btn-import-presets');
+  var fileImportPresets = document.getElementById('file-import-presets');
+  var modeLabel = document.getElementById('mode');
+  var presetActionButtons = {
+    load: document.getElementById('btn-load-preset'),
+    overwrite: document.getElementById('btn-overwrite-preset'),
+    rename: document.getElementById('btn-rename-preset'),
+    duplicate: document.getElementById('btn-duplicate-preset'),
+    del: document.getElementById('btn-delete-preset')
+  };
+
+  var presetMsgTimer = null;
+
+  function presetMsg(text, isError) {
+    if (!presetMsgEl) return;
+    if (presetMsgTimer) { clearTimeout(presetMsgTimer); presetMsgTimer = null; }
+    presetMsgEl.hidden = false;
+    presetMsgEl.style.opacity = '';
+    presetMsgEl.textContent = text;
+    presetMsgEl.classList.toggle('err', !!isError);
+    presetMsgEl.classList.toggle('ok', !isError);
+    anime({
+      targets: presetMsgEl,
+      opacity: [0, 1],
+      translateY: [-4, 0],
+      duration: 260,
+      easing: 'easeOutQuad'
+    });
+    presetMsgTimer = setTimeout(function () {
+      anime({
+        targets: presetMsgEl,
+        opacity: 0,
+        duration: 300,
+        easing: 'easeInQuad',
+        complete: function () {
+          presetMsgEl.hidden = true;
+          presetMsgEl.style.opacity = '';
+        }
+      });
+    }, 4200);
+  }
+
+  function makePresetId() {
+    return 's' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+  }
+
+  /* Игрок из пресета с подстановкой значений по умолчанию */
+  function normalizePresetPlayer(raw) {
+    if (!raw || typeof raw !== 'object') {
+      return { id: makeId(), name: '', number: '', team: 'own', status: 'start', pos: null };
+    }
+    return {
+      id: raw.id == null ? makeId() : String(raw.id),
+      name: typeof raw.name === 'string' ? raw.name : '',
+      number: raw.number == null ? '' : String(raw.number),
+      team: raw.team === 'opponent' ? 'opponent' : 'own',
+      status: raw.status === 'bench' ? 'bench' : 'start',
+      pos: validPos(raw.pos) ? { x: Number(raw.pos.x), y: Number(raw.pos.y) } : null
+    };
+  }
+
+  /* Пресет с проверкой структуры; отсутствующие поля заменяются значениями по умолчанию */
+  function normalizePreset(raw) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.players)) return null;
+    var name = typeof raw.name === 'string' ? raw.name.trim() : '';
+    var savedAt = typeof raw.savedAt === 'string' && !isNaN(new Date(raw.savedAt).getTime())
+      ? raw.savedAt
+      : new Date().toISOString();
+    var colorsRaw = raw.colors && typeof raw.colors === 'object' ? raw.colors : {};
+    return {
+      id: raw.id == null ? '' : String(raw.id),
+      name: name || 'Без названия',
+      savedAt: savedAt,
+      orientation: raw.orientation === 'vertical' ? 'vertical' : 'horizontal',
+      colors: {
+        own: parseHex(colorsRaw.own) ? colorsRaw.own : DEFAULT_COLORS.own,
+        opponent: parseHex(colorsRaw.opponent) ? colorsRaw.opponent : DEFAULT_COLORS.opponent
+      },
+      players: raw.players.map(normalizePresetPlayer)
+    };
+  }
+
+  /* Текущее состояние доски как снимок для пресета */
+  function snapshotPreset() {
+    return {
+      orientation: state.orientation,
+      colors: { own: teamColors.own, opponent: teamColors.opponent },
+      players: players.map(function (p) {
+        return {
+          id: p.id,
+          name: p.name,
+          number: p.number,
+          team: p.team,
+          status: p.status,
+          pos: p.pos ? { x: p.pos.x, y: p.pos.y } : null
+        };
+      })
+    };
+  }
+
+  function persistPresets() {
+    storageSet(PRESETS_KEY, JSON.stringify(presets));
+    storageSet(CURRENT_PRESET_KEY, currentPresetId || '');
+  }
+
+  function findPreset(id) {
+    for (var i = 0; i < presets.length; i++) {
+      if (presets[i].id === id) return presets[i];
+    }
+    return null;
+  }
+
+  function loadPresetsFromStorage() {
+    presets = [];
+    currentPresetId = null;
+    var raw = storageGet(PRESETS_KEY);
+    if (raw) {
+      var seen = {};
+      try {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(function (rp) {
+            var np = normalizePreset(rp);
+            if (!np) return;
+            if (!np.id || seen[np.id]) np.id = makePresetId();
+            seen[np.id] = true;
+            presets.push(np);
+          });
+        }
+      } catch (e) {
+        presets = []; /* повреждённые данные — начинаем с пустого списка */
+      }
+    }
+    var cur = storageGet(CURRENT_PRESET_KEY);
+    if (cur && findPreset(cur)) currentPresetId = cur;
+    selectedPresetId = currentPresetId;
+  }
+
+  function initPresets() {
+    loadPresetsFromStorage();
+    renderPresetList();
+  }
+
+  function formatPresetDate(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    try {
+      return d.toLocaleString('ru-RU', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch (e) {
+      return d.toLocaleString();
+    }
+  }
+
+  function updatePresetButtons() {
+    var has = !!selectedPresetId && !!findPreset(selectedPresetId);
+    Object.keys(presetActionButtons).forEach(function (key) {
+      var btn = presetActionButtons[key];
+      if (btn) btn.disabled = !has;
+    });
+  }
+
+  function renderPresetList() {
+    if (!presetListEl) return;
+    presetListEl.innerHTML = '';
+    if (presetEmptyEl) presetEmptyEl.hidden = presets.length > 0;
+    presets.forEach(function (p) {
+      var li = document.createElement('li');
+      li.className = 'preset-item';
+      if (p.id === selectedPresetId) li.classList.add('active');
+      li.dataset.id = p.id;
+
+      var nameEl = document.createElement('div');
+      nameEl.className = 'preset-item-name';
+      nameEl.textContent = p.name;
+      li.appendChild(nameEl);
+
+      var dateEl = document.createElement('div');
+      dateEl.className = 'preset-item-date';
+      dateEl.textContent = formatPresetDate(p.savedAt);
+      li.appendChild(dateEl);
+
+      li.addEventListener('click', function () { selectPreset(p.id); });
+      li.addEventListener('dblclick', function () { loadPreset(p.id); });
+      presetListEl.appendChild(li);
+    });
+    updatePresetButtons();
+  }
+
+  function selectPreset(id) {
+    if (selectedPresetId === id) return;
+    selectedPresetId = id;
+    renderPresetList();
+  }
+
+  /* Плавное исчезновение круга с поля */
+  function fadeOutTokenEl(el) {
+    if (!el) return;
+    el.classList.add('removing');
+    anime({
+      targets: el.querySelector('.token-scale'),
+      scale: [1, 0],
+      opacity: [1, 0],
+      duration: 300,
+      easing: 'easeInQuad',
+      complete: function () { el.remove(); }
+    });
+  }
+
+  /* Плавный переезд круга на новое место (позиции в px, в конце — %) */
+  function animateTokenTo(el, pos, duration, delay, pxW, pxH) {
+    anime({
+      targets: el,
+      left: pos.u * pxW,
+      top: pos.v * pxH,
+      duration: duration,
+      delay: delay,
+      easing: 'easeInOutCubic',
+      complete: function () {
+        el.style.left = (pos.u * 100) + '%';
+        el.style.top = (pos.v * 100) + '%';
+      }
+    });
+  }
+
+  /* Приводит круги на поле в соответствие с массивом players:
+     существующие плавно переезжают (stagger), новые появляются
+     пружинным эффектом, лишние плавно исчезают. */
+  function syncTokensToPlayers(animated) {
+    var pxW = rotator.offsetWidth || PLAYER_REFERENCE_WIDTH;
+    var pxH = rotator.offsetHeight || pxW / FIELD_ASPECT;
+    var moveDelay = 0;
+    var springDelay = 0;
+    var present = {};
+
+    players.forEach(function (p) {
+      present[p.id] = true;
+      var el = tokenEls[p.id];
+      if (p.pos) {
+        var pos = clampPos(p.pos.x, p.pos.y);
+        if (el) {
+          refreshCard(p);
+          var dragging = drag && drag.type === 'token' && drag.id === p.id;
+          if (animated && !dragging) {
+            moveDelay += 55;
+            animateTokenTo(el, pos, 600, moveDelay, pxW, pxH);
+          } else {
+            el.style.left = (pos.u * 100) + '%';
+            el.style.top = (pos.v * 100) + '%';
+          }
+        } else {
+          if (animated) {
+            springDelay += 80;
+            showToken(p, springDelay);
+          } else {
+            showToken(p);
+          }
+        }
+      } else if (el) {
+        delete tokenEls[p.id];
+        refreshCard(p);
+        fadeOutTokenEl(el);
+      }
+    });
+
+    Object.keys(tokenEls).forEach(function (id) {
+      if (!present[id]) {
+        var el = tokenEls[id];
+        delete tokenEls[id];
+        fadeOutTokenEl(el);
+      }
+    });
+
+    syncCounter();
+  }
+
+  /* Плавное удаление карточки из списка (без побочных эффектов removePlayer) */
+  function animateRemoveCard(card) {
+    if (!card) return;
+    card.classList.add('removing');
+    var cs = getComputedStyle(card);
+    anime({
+      targets: card,
+      height: [card.offsetHeight, 0],
+      paddingTop: [parseFloat(cs.paddingTop), 0],
+      paddingBottom: [parseFloat(cs.paddingBottom), 0],
+      opacity: [1, 0],
+      duration: 280,
+      easing: 'easeInQuad',
+      complete: function () {
+        card.remove();
+        updateHints();
+      }
+    });
+  }
+
+  /* Применяет пресет к доске: составы, позиции, цвета, ориентация */
+  function applyPresetState(preset, animated) {
+    var newPlayers = preset.players.map(normalizePresetPlayer);
+    var seen = {};
+    newPlayers.forEach(function (p) {
+      while (!p.id || seen[p.id]) p.id = makeId();
+      seen[p.id] = true;
+    });
+
+    /* удаляем карточки исчезнувших игроков */
+    var keep = {};
+    newPlayers.forEach(function (p) { keep[p.id] = true; });
+    players.forEach(function (p) {
+      if (keep[p.id]) return;
+      var card = cardEls[p.id];
+      delete cardEls[p.id];
+      if (card) animateRemoveCard(card);
+    });
+
+    players = newPlayers;
+    savePlayers();
+
+    players.forEach(function (p) {
+      var card = cardEls[p.id];
+      if (card) {
+        var list = getListEl(p);
+        if (card.parentElement !== list) list.appendChild(card);
+        refreshCard(p);
+      } else {
+        appendCard(p, true);
+      }
+    });
+    updateHints();
+
+    teamColors.own = preset.colors.own;
+    teamColors.opponent = preset.colors.opponent;
+    saveColors();
+    refreshColorControls();
+
+    if (state.orientation !== preset.orientation) {
+      state.orientation = preset.orientation;
+      storageSet('fb-board-orientation', state.orientation);
+      applyOrientation(false);
+    }
+
+    syncTokensToPlayers(animated);
+
+    currentPresetId = preset.id;
+    persistPresets();
+    renderPresetList();
+  }
+
+  function loadPreset(id) {
+    var p = findPreset(id);
+    if (!p) {
+      presetMsg('Пресет не найден', true);
+      return;
+    }
+    applyPresetState(p, true);
+    presetMsg('Пресет загружен: ' + p.name);
+  }
+
+  function requireSelected() {
+    var p = findPreset(selectedPresetId);
+    if (!p) presetMsg('Сначала выберите пресет в списке', true);
+    return p;
+  }
+
+  presetForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = presetNameInput.value.trim();
+    if (!name) {
+      presetNameInput.classList.add('input-error');
+      presetNameInput.focus();
+      animateShake(presetNameInput);
+      presetMsg('Введите название пресета', true);
+      return;
+    }
+    presetNameInput.classList.remove('input-error');
+    var snapshot = snapshotPreset();
+    var preset = {
+      id: makePresetId(),
+      name: name,
+      savedAt: new Date().toISOString(),
+      orientation: snapshot.orientation,
+      colors: snapshot.colors,
+      players: snapshot.players
+    };
+    presets.push(preset);
+    currentPresetId = preset.id;
+    selectedPresetId = preset.id;
+    persistPresets();
+    renderPresetList();
+    presetNameInput.value = '';
+    presetMsg('Пресет сохранён: ' + name);
+  });
+
+  presetNameInput.addEventListener('input', function () {
+    presetNameInput.classList.remove('input-error');
+  });
+
+  presetActionButtons.load.addEventListener('click', function () {
+    if (requireSelected()) loadPreset(selectedPresetId);
+  });
+
+  presetActionButtons.overwrite.addEventListener('click', function () {
+    var p = requireSelected();
+    if (!p) return;
+    var snapshot = snapshotPreset();
+    p.orientation = snapshot.orientation;
+    p.colors = snapshot.colors;
+    p.players = snapshot.players;
+    p.savedAt = new Date().toISOString();
+    currentPresetId = p.id;
+    persistPresets();
+    renderPresetList();
+    presetMsg('Пресет перезаписан: ' + p.name);
+  });
+
+  presetActionButtons.rename.addEventListener('click', function () {
+    var p = requireSelected();
+    if (!p) return;
+    var name = prompt('Новое название пресета', p.name);
+    if (name === null) return;
+    name = name.trim();
+    if (!name) {
+      presetMsg('Название не может быть пустым', true);
+      return;
+    }
+    p.name = name;
+    persistPresets();
+    renderPresetList();
+    presetMsg('Пресет переименован: ' + name);
+  });
+
+  presetActionButtons.duplicate.addEventListener('click', function () {
+    var p = requireSelected();
+    if (!p) return;
+    var name = prompt('Название копии', p.name + ' — копия');
+    if (name === null) return;
+    name = name.trim();
+    if (!name) {
+      presetMsg('Название не может быть пустым', true);
+      return;
+    }
+    var copy = normalizePreset(JSON.parse(JSON.stringify(p)));
+    do { copy.id = makePresetId(); } while (findPreset(copy.id));
+    copy.name = name;
+    copy.savedAt = new Date().toISOString();
+    presets.push(copy);
+    selectedPresetId = copy.id;
+    persistPresets();
+    renderPresetList();
+    presetMsg('Создана копия: ' + name);
+  });
+
+  presetActionButtons.del.addEventListener('click', function () {
+    var p = requireSelected();
+    if (!p) return;
+    if (!confirm('Удалить пресет «' + p.name + '»?')) return;
+    presets = presets.filter(function (item) { return item.id !== p.id; });
+    if (currentPresetId === p.id) currentPresetId = null;
+    selectedPresetId = null;
+    persistPresets();
+    renderPresetList();
+    presetMsg('Пресет удалён: ' + p.name);
+  });
+
+  /* ── Готовые схемы расстановки ─────────────── */
+
+  /* Слоты схемы: x возрастает от ворот к атаке, игроки линии
+     распределяются по ширине поля равномерно (координаты 0–1). */
+  function formationSlots(counts) {
+    var xs = [0.06]; /* вратарь */
+    var lines = counts.length;
+    for (var i = 1; i < lines; i++) {
+      xs.push(lines === 2 ? 0.3 : round4(0.17 + (i - 1) * (0.29 / (lines - 2))));
+    }
+    var slots = [];
+    counts.forEach(function (m, lineIdx) {
+      var gap = 0.8 / m;
+      for (var j = 0; j < m; j++) {
+        slots.push({
+          x: xs[lineIdx],
+          y: m === 1 ? 0.5 : round4(0.5 + (j - (m - 1) / 2) * gap)
+        });
+      }
+    });
+    return slots;
+  }
+
+  btnApplyFormation.addEventListener('click', function () {
+    anime({
+      targets: btnApplyFormation,
+      scale: [1, 0.92, 1],
+      duration: 320,
+      easing: 'easeOutQuad'
+    });
+    var key = formationSelect.value;
+    if (!FORMATIONS[key]) {
+      presetMsg('Выберите схему расстановки', true);
+      return;
+    }
+    var slots = formationSlots(FORMATIONS[key]);
+    var starters = players.filter(function (p) {
+      return p.team === 'own' && p.status === 'start';
+    });
+    /* меняем только игроков основного состава; лишние остаются в списке */
+    starters.forEach(function (p) { p.pos = null; });
+    var placed = Math.min(starters.length, slots.length);
+    for (var i = 0; i < placed; i++) {
+      var pos = clampPos(slots[i].x, slots[i].y);
+      starters[i].pos = { x: round4(pos.u), y: round4(pos.v) };
+    }
+    savePlayers();
+    if (modeLabel) modeLabel.textContent = 'Схема ' + key;
+    syncTokensToPlayers(true);
+    presetMsg('Схема ' + key + ': на поле ' + placed + ' из ' + starters.length);
+  });
+
   /* ── Появление при загрузке ────────────────── */
 
   anime.timeline({ easing: 'easeOutExpo' })
@@ -1083,6 +1629,101 @@ btnMenu.addEventListener('click', function () {
       duration: 700
     }, '-=350');
 
+  /* ── Экспорт и импорт пресетов ─────────────── */
+
+  btnExportPresets.addEventListener('click', function () {
+    var chosen = findPreset(selectedPresetId);
+    var list = chosen ? [chosen] : presets;
+    if (!list.length) {
+      presetMsg('Нет пресетов для экспорта', true);
+      return;
+    }
+    var payload = {
+      app: 'football-board',
+      type: 'presets',
+      exportedAt: new Date().toISOString(),
+      presets: list.map(function (p) { return JSON.parse(JSON.stringify(p)); })
+    };
+    try {
+      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'presety-futbolnoy-doski.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      presetMsg('Экспортировано пресетов: ' + list.length + (chosen ? ' (выбранный)' : ' (все)'));
+    } catch (e) {
+      presetMsg('Не удалось экспортировать пресеты', true);
+    }
+  });
+
+  btnImportPresets.addEventListener('click', function () {
+    anime({
+      targets: btnImportPresets,
+      scale: [1, 0.92, 1],
+      duration: 320,
+      easing: 'easeOutQuad'
+    });
+    fileImportPresets.value = '';
+    fileImportPresets.click();
+  });
+
+  fileImportPresets.addEventListener('change', function () {
+    var file = fileImportPresets.files && fileImportPresets.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      importPresetsFromText(String(reader.result));
+    };
+    reader.onerror = function () {
+      presetMsg('Не удалось прочитать файл', true);
+    };
+    try {
+      reader.readAsText(file);
+    } catch (e) {
+      presetMsg('Не удалось прочитать файл', true);
+    }
+  });
+
+  function importPresetsFromText(text) {
+    var data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      presetMsg('Не удалось импортировать: файл повреждён или это не JSON', true);
+      return;
+    }
+    var rawList = null;
+    if (Array.isArray(data)) {
+      rawList = data;
+    } else if (data && typeof data === 'object') {
+      if (Array.isArray(data.presets)) rawList = data.presets;
+      else if (Array.isArray(data.players)) rawList = [data]; /* одиночный пресет */
+    }
+    if (!rawList) {
+      presetMsg('Не удалось импортировать: неверный формат файла', true);
+      return;
+    }
+    var imported = [];
+    rawList.forEach(function (raw) {
+      var np = normalizePreset(raw);
+      if (!np) return;
+      do { np.id = makePresetId(); } while (findPreset(np.id));
+      imported.push(np);
+    });
+    if (!imported.length) {
+      presetMsg('В файле нет корректных пресетов', true);
+      return;
+    }
+    imported.forEach(function (np) { presets.push(np); });
+    persistPresets();
+    renderPresetList();
+    presetMsg('Импортировано пресетов: ' + imported.length);
+  }
+
   /* ── Старт ─────────────────────────────────── */
 
   initTheme();
@@ -1093,5 +1734,6 @@ btnMenu.addEventListener('click', function () {
   }
   applyOrientation(false);
 
+  initPresets();
   syncCounter();
 })();
