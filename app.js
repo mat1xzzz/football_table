@@ -35,9 +35,9 @@ var FIELD_ASPECT = 1200 / 780;
 
 /* Размер кругов игроков: радиус относительно ширины поля.
    Эталонная ширина поля — 1200, базовый радиус — 17px,
-   итоговый радиус — базовый размер, умноженный на 2. */
+   итоговый радиус — базовый размер, умноженный на 0.7. */
 var PLAYER_REFERENCE_WIDTH = 1200;
-var PLAYER_RADIUS = 17 * 1.05 * 2;
+var PLAYER_RADIUS = 17 * 1.05 * 2 * 0.7;
 
 var state = {
   orientation: 'horizontal' /* 'horizontal' | 'vertical' */
