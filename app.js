@@ -3,18 +3,18 @@
 
   var THEMES = { light: 'light', dark: 'dark' };
 
-  /* ── Тема ──────────────────────────────────── */
+/* ── Тема ──────────────────────────────────── */
 
-  var themeBtn = document.getElementById('btn-theme');
-  var root = document.documentElement;
+var themeBtn = document.getElementById('btn-theme');
+var root = document.documentElement;
 
-  function applyTheme(theme) {
-    root.setAttribute('data-theme', theme);
-    themeBtn.textContent = theme === THEMES.dark ? '☀️' : '🌙';
-    try {
-      localStorage.setItem('fb-board-theme', theme);
-    } catch (e) { /* file:// может запрещать хранилище */ }
-  }
+function applyTheme(theme) {
+  root.setAttribute('data-theme', theme);
+  themeBtn.textContent = theme === THEMES.dark ? '☀️' : '🌙';
+  try {
+    localStorage.setItem('fb-board-theme', theme);
+  } catch (e) { /* file:// может запрещать хранилище */ }
+}
 
   function initTheme() {
     var saved = null;
@@ -29,57 +29,107 @@
     applyTheme(root.getAttribute('data-theme') === THEMES.dark ? THEMES.light : THEMES.dark);
   });
 
-  /* ── Повернуть поле ────────────────────────── */
+/* ── Повернуть поле ────────────────────────── */
 
-  var btnRotate = document.getElementById('btn-rotate');
-  var fieldWrap = document.getElementById('field-wrap');
-  var orientationLabel = document.getElementById('orientation');
-  var rotated = false;
-  var rotating = false;
+var FIELD_ASPECT = 1200 / 780;
 
-  btnRotate.addEventListener('click', function () {
-    if (rotating) return;
-    rotating = true;
+var state = {
+  orientation: 'horizontal' /* 'horizontal' | 'vertical' */
+};
 
-    anime({
-      targets: fieldWrap,
-      scale: [1, 0.86],
-      duration: 350,
-      easing: 'easeInQuad',
-      complete: function () {
-        rotated = !rotated;
-        orientationLabel.textContent = rotated ? 'Вертикальная' : 'Горизонтальная';
+var btnRotate = document.getElementById('btn-rotate');
+var fieldWrap = document.getElementById('field-wrap');
+var rotator = document.getElementById('field-rotator');
+var orientationLabel = document.getElementById('orientation');
+var rotating = false;
+var angle = 0;
 
-        anime({
-          targets: fieldWrap,
-          rotate: rotated ? 180 : 0,
-          scale: [0.86, 1],
-          duration: 650,
-          easing: 'easeOutElastic(1, .6)',
-          complete: function () {
-            fieldWrap.style.transform = rotated ? 'rotate(180deg)' : 'rotate(0deg)';
-            rotating = false;
-          }
-        });
-      }
-    });
+function storageGet(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function storageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) { /* file:// может запрещать хранилище */ }
+}
+
+/* Подбирает размеры контейнера поля так, чтобы оно целиком
+   помещалось в доступную область и сохраняло пропорции.
+   В вертикальном режиме контейнер повёрнут на 90°,
+   поэтому после поворования ширина и высота меняются местами. */
+function fitField() {
+  var availW = fieldWrap.clientWidth;
+  var availH = fieldWrap.clientHeight;
+  var w;
+
+  if (state.orientation === 'horizontal') {
+    w = Math.min(availW, availH * FIELD_ASPECT);
+  } else {
+    /* повёрнутые габариты: ширина контейнера -> высота экрана, высота -> ширина */
+    w = Math.min(availH, availW * FIELD_ASPECT);
+  }
+
+  w = Math.max(0, Math.floor(w));
+  rotator.style.width = w + 'px';
+  rotator.style.height = Math.max(0, Math.floor(w / FIELD_ASPECT)) + 'px';
+}
+
+function applyOrientation(animate) {
+  var vertical = state.orientation === 'vertical';
+  orientationLabel.textContent = vertical ? 'Вертикальная' : 'Горизонтальная';
+  fitField();
+
+  if (!animate) {
+    angle = vertical ? 90 : 0;
+    rotator.style.transform = 'rotate(' + angle + 'deg)';
+    return;
+  }
+
+  if (rotating) return;
+  rotating = true;
+
+  anime({
+    targets: rotator,
+    rotate: angle + 90,
+    scale: [1, 0.9, 1],
+    duration: 700,
+    easing: 'easeInOutCubic',
+    complete: function () {
+      angle = (angle + 90) % 360;
+      rotator.style.transform = 'rotate(' + angle + 'deg)';
+      rotating = false;
+    }
   });
+}
 
-  /* ── Боковая панель ────────────────────────── */
+btnRotate.addEventListener('click', function () {
+  state.orientation = state.orientation === 'horizontal' ? 'vertical' : 'horizontal';
+  storageSet('fb-board-orientation', state.orientation);
+  applyOrientation(true);
+});
 
-  var btnMenu = document.getElementById('btn-menu');
-  var sidebar = document.getElementById('sidebar');
+window.addEventListener('resize', fitField);
 
-  btnMenu.addEventListener('click', function () {
-    sidebar.classList.toggle('collapsed');
-    var collapsed = sidebar.classList.contains('collapsed');
-    anime({
-      targets: btnMenu,
-      rotate: collapsed ? -90 : 0,
-      duration: 300,
-      easing: 'easeOutQuad'
-    });
+/* ── Боковая панель ────────────────────────── */
+
+var btnMenu = document.getElementById('btn-menu');
+var sidebar = document.getElementById('sidebar');
+
+btnMenu.addEventListener('click', function () {
+  sidebar.classList.toggle('collapsed');
+  var collapsed = sidebar.classList.contains('collapsed');
+  anime({
+    targets: btnMenu,
+    scale: [1, 0.92, 1],
+    duration: 320,
+    easing: 'easeOutQuad'
   });
+});
 
   /* ── Инструменты (заготовка этапа 1) ───────── */
 
@@ -135,5 +185,12 @@
   /* ── Старт ─────────────────────────────────── */
 
   initTheme();
+
+  var savedOrientation = storageGet('fb-board-orientation');
+  if (savedOrientation === 'vertical' || savedOrientation === 'horizontal') {
+    state.orientation = savedOrientation;
+  }
+  applyOrientation(false);
+
   counter.textContent = '0';
 })();

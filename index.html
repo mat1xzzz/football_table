@@ -9,12 +9,12 @@
 <body>
   <header class="toolbar fade-item">
     <div class="toolbar-left">
-      <button id="btn-menu" class="icon-btn" title="Скрыть/показать панель" aria-label="Скрыть панель">☰</button>
+      <button id="btn-menu" class="icon-btn" title="Скрыть или показать панель" aria-label="Скрыть панель">☰</button>
       <h1 class="app-title">⚽ Футбольная доска</h1>
     </div>
     <div class="toolbar-right">
       <button id="btn-rotate" class="tool-btn" title="Повернуть поле">🔄 Повернуть поле</button>
-      <button id="btn-theme" class="icon-btn" title="Сменить тему" aria-label="Сменить тему">🌙</button>
+      <button id="btn-theme" class="tool-btn" title="Сменить тему" aria-label="Сменить тему">🌙</button>
     </div>
   </header>
 
@@ -23,20 +23,20 @@
       <section class="panel fade-item">
         <h2 class="panel-title">Инструменты</h2>
         <div class="tool-grid">
-          <button class="tool-btn" data-tool="player" title="Игрок своей команды">👤 Игрок</button>
-          <button class="tool-btn" data-tool="opponent" title="Игрок соперника">🥊 Соперник</button>
-          <button class="tool-btn" data-tool="ball" title="Мяч">⚽ Мяч</button>
-          <button class="tool-btn" data-tool="cone" title="Конус">🔺 Конус</button>
-          <button class="tool-btn" data-tool="arrow" title="Стрелка">➡️ Стрелка</button>
-          <button class="tool-btn" data-tool="text" title="Подпись">✏️ Подпись</button>
+          <button class="tool-btn" data-tool="player" title="Игрок своей команды">Игрок</button>
+          <button class="tool-btn" data-tool="opponent" title="Игрок соперника">Соперник</button>
+          <button class="tool-btn" data-tool="ball" title="Мяч">Мяч</button>
+          <button class="tool-btn" data-tool="cone" title="Конус">Конус</button>
+          <button class="tool-btn" data-tool="arrow" title="Стрелка">Стрелка</button>
+          <button class="tool-btn" data-tool="text" title="Подпись">Подпись</button>
         </div>
       </section>
 
       <section class="panel fade-item">
         <h2 class="panel-title">Действия</h2>
         <div class="tool-grid">
-          <button class="tool-btn" data-action="clear" title="Очистить поле">🗑 Очистить</button>
-          <button class="tool-btn" data-action="undo" title="Отменить">↩️ Отменить</button>
+          <button class="tool-btn" data-action="clear" title="Очистить поле">Очистить</button>
+          <button class="tool-btn" data-action="undo" title="Отменить">Отменить</button>
         </div>
       </section>
 
@@ -56,6 +56,7 @@
 
     <main class="field-area fade-item">
       <div id="field-wrap" class="field-wrap">
+        <div id="field-rotator" class="field-rotator">
         <svg id="field" viewBox="0 0 1200 780" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Футбольное поле">
           <defs>
             <linearGradient id="grass" x1="0" y1="0" x2="1" y2="0">
@@ -123,6 +124,7 @@
             </g>
           </g>
         </svg>
+        </div>
       </div>
     </main>
   </div>
