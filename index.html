@@ -35,8 +35,8 @@
       <section class="panel fade-item">
         <h2 class="panel-title">Составы</h2>
         <form id="player-form" class="player-form" autocomplete="off">
-          <input id="player-name" class="player-input" type="text" placeholder="Имя игрока" maxlength="40">
-          <input id="player-number" class="player-input player-number" type="text" inputmode="numeric" placeholder="№ (необяз.)" maxlength="3">
+          <input id="player-number" class="player-input player-number" type="number" inputmode="numeric" min="0" max="99" step="1" placeholder="Номер (обяз.)">
+          <input id="player-name" class="player-input" type="text" placeholder="Имя (необяз.)" maxlength="40">
           <select id="player-target" class="player-input" title="Куда добавить игрока">
             <option value="own-start">Основной состав</option>
             <option value="own-bench">Запасные</option>

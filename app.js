@@ -230,7 +230,7 @@ btnMenu.addEventListener('click', function () {
   }
 
   function normalizeNumber(value) {
-    return String(value).replace(/\D/g, '').slice(0, 3);
+    return String(value).replace(/\D/g, '').slice(0, 2);
   }
 
   function updateHints() {
@@ -285,20 +285,31 @@ btnMenu.addEventListener('click', function () {
     editBox.className = 'player-edit';
     editBox.hidden = true;
 
+    var editNumber = document.createElement('input');
+    editNumber.className = 'player-input edit-number';
+    editNumber.type = 'number';
+    editNumber.inputMode = 'numeric';
+    editNumber.min = '0';
+    editNumber.max = '99';
+    editNumber.step = '1';
+    editNumber.placeholder = 'Номер (обяз.)';
+    editNumber.addEventListener('input', function () {
+      editNumber.value = normalizeNumber(editNumber.value);
+      editNumber.classList.remove('input-error');
+    });
+    editNumber.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') endEdit(p.id, true);
+      if (e.key === 'Escape') endEdit(p.id, false);
+    });
+
     var editName = document.createElement('input');
     editName.className = 'player-input edit-name';
     editName.type = 'text';
     editName.maxLength = 40;
-    editName.placeholder = 'Имя игрока';
-
-    var editNumber = document.createElement('input');
-    editNumber.className = 'player-input edit-number';
-    editNumber.type = 'text';
-    editNumber.inputMode = 'numeric';
-    editNumber.maxLength = 3;
-    editNumber.placeholder = '№ (необяз.)';
-    editNumber.addEventListener('input', function () {
-      editNumber.value = normalizeNumber(editNumber.value);
+    editName.placeholder = 'Имя (необяз.)';
+    editName.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') endEdit(p.id, true);
+      if (e.key === 'Escape') endEdit(p.id, false);
     });
 
     var editActions = document.createElement('div');
@@ -318,8 +329,8 @@ btnMenu.addEventListener('click', function () {
 
     editActions.appendChild(saveBtn);
     editActions.appendChild(cancelBtn);
-    editBox.appendChild(editName);
     editBox.appendChild(editNumber);
+    editBox.appendChild(editName);
     editBox.appendChild(editActions);
     li.appendChild(editBox);
 
@@ -342,7 +353,9 @@ btnMenu.addEventListener('click', function () {
   function refreshCard(p, cardEl) {
     var li = cardEl || cardEls[p.id];
     if (!li) return;
-    li.querySelector('.player-name').textContent = p.number ? '№' + p.number + ' ' + p.name : p.name;
+    li.querySelector('.player-name').textContent = p.number
+      ? '№' + p.number + (p.name ? ' ' + p.name : '')
+      : p.name;
     li.classList.toggle('on-field', !!(p && p.pos));
     var moveBtn = li.querySelector('.move-btn');
     if (moveBtn) moveBtn.textContent = p.status === 'start' ? 'Запасной' : 'Основа';
@@ -446,7 +459,7 @@ btnMenu.addEventListener('click', function () {
     card.querySelector('.player-actions').hidden = true;
     var box = card.querySelector('.player-edit');
     box.hidden = false;
-    box.querySelector('.edit-name').focus();
+    box.querySelector('.edit-number').focus();
   }
 
   function endEdit(id, apply) {
@@ -455,15 +468,16 @@ btnMenu.addEventListener('click', function () {
     if (!p || !card || !card.classList.contains('editing')) return;
     var box = card.querySelector('.player-edit');
     if (apply) {
-      var nameVal = box.querySelector('.edit-name').value.trim();
-      if (!nameVal) {
-        var nameInput = box.querySelector('.edit-name');
-        nameInput.focus();
-        animateShake(nameInput);
+      var numberVal = normalizeNumber(box.querySelector('.edit-number').value);
+      if (!numberVal) {
+        var numberInput = box.querySelector('.edit-number');
+        numberInput.classList.add('input-error');
+        numberInput.focus();
+        animateShake(numberInput);
         return;
       }
-      p.name = nameVal;
-      p.number = normalizeNumber(box.querySelector('.edit-number').value);
+      p.number = numberVal;
+      p.name = box.querySelector('.edit-name').value.trim();
       savePlayers();
       updateTokenText(p);
     }
@@ -485,23 +499,36 @@ btnMenu.addEventListener('click', function () {
 
   playerNumberInput.addEventListener('input', function () {
     playerNumberInput.value = normalizeNumber(playerNumberInput.value);
+    playerNumberInput.classList.remove('input-error');
   });
 
   playerForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    var name = playerNameInput.value.trim();
-    if (!name) {
-      playerNameInput.focus();
-      animateShake(playerNameInput);
+    var numberVal = normalizeNumber(playerNumberInput.value);
+    if (!numberVal) {
+      playerNumberInput.classList.add('input-error');
+      playerNumberInput.focus();
+      animateShake(playerNumberInput);
       return;
     }
+    var name = playerNameInput.value.trim();
     var target = playerTargetSelect.value;
     var team = target === 'opponent' ? 'opponent' : 'own';
     var status = target === 'own-bench' ? 'bench' : 'start';
-    addPlayer(name, normalizeNumber(playerNumberInput.value), team, status);
+    addPlayer(name, numberVal, team, status);
     playerNameInput.value = '';
     playerNumberInput.value = '';
     playerNameInput.focus();
+  });
+
+  [playerNumberInput, playerNameInput].forEach(function (input) {
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (playerForm.requestSubmit) playerForm.requestSubmit();
+        else playerForm.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
+    });
   });
 
   /* ── Игроки на поле ───────────────────────── */
@@ -625,6 +652,7 @@ btnMenu.addEventListener('click', function () {
     var label = document.createElement('div');
     label.className = 'token-label';
     label.textContent = p.name;
+    linkLabelHidden(label, p.name);
 
     inner.appendChild(disc);
     inner.appendChild(label);
@@ -642,9 +670,16 @@ btnMenu.addEventListener('click', function () {
     var el = tokenEls[p.id];
     if (!el) return;
     el.querySelector('.token-disc span').textContent = p.number || '';
-    el.querySelector('.token-label').textContent = p.name;
+    var label = el.querySelector('.token-label');
+    label.textContent = p.name;
+    linkLabelHidden(label, p.name);
     el.classList.toggle('token-own', p.team !== 'opponent');
     el.classList.toggle('token-opponent', p.team === 'opponent');
+  }
+
+  /* Имя под кругом показывается только если оно есть */
+  function linkLabelHidden(label, name) {
+    label.hidden = !name;
   }
 
   function showToken(p) {
@@ -726,7 +761,9 @@ btnMenu.addEventListener('click', function () {
   function buildGhost(p) {
     var g = document.createElement('div');
     g.className = 'drag-ghost ' + (p.team === 'opponent' ? 'ghost-opponent' : 'ghost-own');
-    g.textContent = (p.number ? '№' + p.number + ' ' : '') + p.name;
+    g.textContent = p.number
+      ? '№' + p.number + (p.name ? ' ' + p.name : '')
+      : p.name;
     document.body.appendChild(g);
     return g;
   }

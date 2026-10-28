@@ -223,6 +223,11 @@ body {
   border-color: var(--accent);
 }
 
+.player-input.input-error {
+  border-color: #e11d48;
+  box-shadow: 0 0 0 2px rgba(225, 29, 72, 0.18);
+}
+
 #player-name,
 #player-number,
 #player-target {
@@ -233,6 +238,21 @@ select.player-input {
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
+}
+
+/* Числовой ввод без стрелок-спиннеров */
+#player-number,
+.edit-number {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+#player-number::-webkit-outer-spin-button,
+#player-number::-webkit-inner-spin-button,
+.edit-number::-webkit-outer-spin-button,
+.edit-number::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .player-add-btn {
