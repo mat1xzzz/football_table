@@ -1775,15 +1775,20 @@ btnMenu.addEventListener('click', function () {
     toast('Схема ' + key + ': на поле ' + placed + ' из ' + starters.length);
   }
 
-  /* Маленькое превью схемы точками на своём полу поля */
+  /* Вертикальное превью схемы: вратарь внизу по центру, линии снизу
+     вверх. Те же координаты, что в расстановке (x — от ворот к атаке,
+     y — по ширине), спроецированные на превью: половина поля по x
+     растянута на всю высоту, y — на ширину. Цвет точек — текущий
+     цвет своей команды. */
   function buildFormationPreview(counts) {
     var box = document.createElement('span');
     box.className = 'formation-preview';
     formationSlots(counts).forEach(function (slot) {
       var dot = document.createElement('span');
       dot.className = 'formation-dot';
-      dot.style.left = (slot.x * 100) + '%';
-      dot.style.top = (slot.y * 100) + '%';
+      dot.style.left = (slot.y * 100) + '%';
+      dot.style.top = ((1 - slot.x * 2) * 100) + '%';
+      dot.style.background = teamColors.own;
       box.appendChild(dot);
     });
     return box;
