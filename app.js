@@ -33,6 +33,12 @@ function applyTheme(theme) {
 
 var FIELD_ASPECT = 1200 / 780;
 
+/* Размер кругов игроков: радиус относительно ширины поля.
+   Эталонная ширина поля — 1200, базовый радиус — 17px,
+   итоговый радиус на 5% больше базового. */
+var PLAYER_REFERENCE_WIDTH = 1200;
+var PLAYER_RADIUS = 17 * 1.05;
+
 var state = {
   orientation: 'horizontal' /* 'horizontal' | 'vertical' */
 };
@@ -77,6 +83,15 @@ function fitField() {
   w = Math.max(0, Math.floor(w));
   rotator.style.width = w + 'px';
   rotator.style.height = Math.max(0, Math.floor(w / FIELD_ASPECT)) + 'px';
+  setPlayerSize();
+}
+
+/* Диаметр круга в px от текущей ширины поля,
+   публикуется как CSS-переменная --player-size */
+function setPlayerSize() {
+  var W = rotator.offsetWidth || PLAYER_REFERENCE_WIDTH;
+  var d = PLAYER_RADIUS * 2 / PLAYER_REFERENCE_WIDTH * W;
+  rotator.style.setProperty('--player-size', d.toFixed(2) + 'px');
 }
 
 function applyOrientation(animate) {
@@ -589,11 +604,17 @@ btnMenu.addEventListener('click', function () {
     fieldSvg.classList.toggle('drop-ready', !!on);
   }
 
+  /* Радиус круга в px от текущей ширины поля */
+  function playerRadiusPx() {
+    var W = rotator.offsetWidth || PLAYER_REFERENCE_WIDTH;
+    return PLAYER_RADIUS / PLAYER_REFERENCE_WIDTH * W;
+  }
+
   /* Держит круг целиком внутри поля */
   function clampPos(u, v) {
     var W = rotator.offsetWidth || 1;
     var H = rotator.offsetHeight || 1;
-    var r = 17; /* радиус круга в px */
+    var r = playerRadiusPx();
     var mu = Math.min(0.5, r / W);
     var mv = Math.min(0.5, r / H);
     return {
