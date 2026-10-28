@@ -134,6 +134,7 @@ body {
   flex-direction: column;
   gap: 14px;
   overflow-y: auto;
+  overflow-x: hidden;
   transition: margin-left 0.35s ease, background 0.3s ease;
 }
 
@@ -147,6 +148,7 @@ body {
   border-radius: var(--radius);
   padding: 12px;
   box-shadow: var(--shadow);
+  overflow-x: hidden;
 }
 
 .panel-title {
@@ -160,13 +162,16 @@ body {
 
 .tool-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .tool-grid .tool-btn {
+  width: 100%;
+  min-width: 0;
   font-size: 12px;
   padding: 9px 6px;
+  white-space: normal;
   text-align: center;
 }
 
@@ -649,22 +654,27 @@ select.player-input {
 
 .preset-toolbar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  width: 100%;
 }
 
 .preset-btn {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  padding: 8px 10px;
+  padding: 10px 8px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-panel);
   color: var(--text);
   cursor: pointer;
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s;
 }
 
@@ -701,6 +711,9 @@ select.player-input {
 }
 
 .preset-item {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 10px;
@@ -722,7 +735,9 @@ select.player-input {
 .preset-item-name {
   font-size: 12.5px;
   font-weight: 700;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .preset-item.active .preset-item-name {
