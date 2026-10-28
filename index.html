@@ -30,6 +30,20 @@
           <button class="tool-btn" data-tool="arrow" title="Стрелка">Стрелка</button>
           <button class="tool-btn" data-tool="text" title="Подпись">Подпись</button>
         </div>
+
+        <div class="team-colors">
+          <label class="team-color-row">
+            <span class="color-swatch" id="swatch-own"></span>
+            <span class="team-color-label">Цвет моей команды</span>
+            <input type="color" id="color-own" value="#2563eb" title="Цвет моей команды">
+          </label>
+          <label class="team-color-row">
+            <span class="color-swatch" id="swatch-opponent"></span>
+            <span class="team-color-label">Цвет соперника</span>
+            <input type="color" id="color-opponent" value="#dc2626" title="Цвет соперника">
+          </label>
+          <button id="btn-reset-colors" class="tool-btn team-reset-btn" title="Вернуть цвета по умолчанию">Сбросить цвета</button>
+        </div>
       </section>
 
       <section class="panel fade-item">
@@ -47,17 +61,17 @@
 
         <div class="roster">
           <div class="roster-group">
-            <h3 class="roster-title">Основной состав</h3>
+            <h3 class="roster-title"><span class="team-dot" data-team="own"></span>Основной состав</h3>
             <ul class="player-list" id="list-start"></ul>
             <p class="list-empty" hidden>Пока нет игроков</p>
           </div>
           <div class="roster-group">
-            <h3 class="roster-title">Запасные</h3>
+            <h3 class="roster-title"><span class="team-dot" data-team="own"></span>Запасные</h3>
             <ul class="player-list" id="list-bench"></ul>
             <p class="list-empty" hidden>Пока нет игроков</p>
           </div>
           <div class="roster-group">
-            <h3 class="roster-title">Соперник</h3>
+            <h3 class="roster-title"><span class="team-dot" data-team="opponent"></span>Соперник</h3>
             <ul class="player-list" id="list-opponent"></ul>
             <p class="list-empty" hidden>Пока нет игроков</p>
           </div>

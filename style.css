@@ -295,6 +295,71 @@ select.player-input {
   margin-bottom: 6px;
 }
 
+/* ── Выбор цвета команд ─────────────────────── */
+
+.team-colors {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.team-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.team-color-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.color-swatch {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+  transition: background 0.3s ease;
+}
+
+.team-color-row input[type="color"] {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  cursor: pointer;
+}
+
+.team-reset-btn {
+  width: 100%;
+  font-size: 12px;
+  text-align: center;
+}
+
+.team-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: var(--accent);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  transition: background 0.3s ease;
+}
+
 .player-list {
   list-style: none;
   display: flex;

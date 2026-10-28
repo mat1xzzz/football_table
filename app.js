@@ -666,6 +666,9 @@ btnMenu.addEventListener('click', function () {
 
     var disc = document.createElement('div');
     disc.className = 'token-disc';
+    var teamKey = p.team === 'opponent' ? teamColors.opponent : teamColors.own;
+    disc.style.background = teamKey;
+    disc.style.color = numberColorFor(teamKey);
     var num = document.createElement('span');
     num.textContent = p.number || '';
     disc.appendChild(num);
@@ -780,8 +783,11 @@ btnMenu.addEventListener('click', function () {
   /* ── Призрак при перетаскивании из списка ─── */
 
   function buildGhost(p) {
+    var isOpponent = p.team === 'opponent';
     var g = document.createElement('div');
-    g.className = 'drag-ghost ' + (p.team === 'opponent' ? 'ghost-opponent' : 'ghost-own');
+    g.className = 'drag-ghost ' + (isOpponent ? 'ghost-opponent' : 'ghost-own');
+    g.style.background = isOpponent ? teamColors.opponent : teamColors.own;
+    g.style.color = numberColorFor(isOpponent ? teamColors.opponent : teamColors.own);
     g.textContent = p.number
       ? '№' + p.number + (p.name ? ' ' + p.name : '')
       : p.name;
@@ -932,6 +938,124 @@ btnMenu.addEventListener('click', function () {
     savePlayers();
     placeToken(d.token, p);
   }
+
+  /* ── Цвета команд ─────────────────────────── */
+
+  var COLORS_KEY = 'fb-board-colors';
+  var DEFAULT_COLORS = { own: '#2563eb', opponent: '#dc2626' };
+  var teamColors = { own: DEFAULT_COLORS.own, opponent: DEFAULT_COLORS.opponent };
+
+  var colorInputs = {
+    own: document.getElementById('color-own'),
+    opponent: document.getElementById('color-opponent')
+  };
+  var colorSwatches = {
+    own: document.getElementById('swatch-own'),
+    opponent: document.getElementById('swatch-opponent')
+  };
+  var teamDots = document.querySelectorAll('.team-dot');
+  var btnResetColors = document.getElementById('btn-reset-colors');
+
+  function parseHex(hex) {
+    var m = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return null;
+    return {
+      r: parseInt(m[1].substr(0, 2), 16),
+      g: parseInt(m[1].substr(2, 2), 16),
+      b: parseInt(m[1].substr(4, 2), 16)
+    };
+  }
+
+  /* Относительная яркость по WCAG (линеаризованный sRGB) */
+  function relativeLuminance(rgb) {
+    function lin(c) {
+      c = c / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    }
+    return 0.2126 * lin(rgb.r) + 0.7152 * lin(rgb.g) + 0.0722 * lin(rgb.b);
+  }
+
+  /* Чёрный номер на светлом фоне, белый на тёмном */
+  function numberColorFor(hex) {
+    var rgb = parseHex(hex);
+    if (!rgb) return '#ffffff';
+    return relativeLuminance(rgb) > 0.45 ? '#111827' : '#ffffff';
+  }
+
+  function saveColors() {
+    storageSet(COLORS_KEY, JSON.stringify(teamColors));
+  }
+
+  function loadColors() {
+    var raw = storageGet(COLORS_KEY);
+    if (!raw) return;
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        ['own', 'opponent'].forEach(function (team) {
+          if (parseHex(parsed[team])) teamColors[team] = parsed[team];
+        });
+      }
+    } catch (e) { /* повреждённые данные — используем значения по умолчанию */ }
+  }
+
+  /* Обновляет образцы, поля выбора и маркеры в заголовках списков */
+  function refreshColorControls() {
+    ['own', 'opponent'].forEach(function (team) {
+      if (colorInputs[team]) colorInputs[team].value = teamColors[team];
+      if (colorSwatches[team]) colorSwatches[team].style.background = teamColors[team];
+    });
+    for (var i = 0; i < teamDots.length; i++) {
+      var dot = teamDots[i];
+      dot.style.background = teamColors[dot.dataset.team === 'opponent' ? 'opponent' : 'own'];
+    }
+  }
+
+  /* Плавно перекрашивает сами круги (с одновременной сменой цвета номера) */
+  function animateTeamDiscs(team, hex) {
+    var discs = tokensLayer.querySelectorAll(
+      '.' + (team === 'opponent' ? 'token-opponent' : 'token-own') + ' .token-disc'
+    );
+    if (!discs.length) return;
+    anime({
+      targets: discs,
+      backgroundColor: hex,
+      color: numberColorFor(hex),
+      duration: 300,
+      easing: 'easeOutQuad'
+    });
+  }
+
+  function setTeamColor(team, hex, animateDiscs) {
+    if (!parseHex(hex)) return;
+    teamColors[team] = hex;
+    saveColors();
+    refreshColorControls();
+    if (animateDiscs) animateTeamDiscs(team, hex);
+  }
+
+  function onColorInput(team) {
+    return function (e) {
+      setTeamColor(team, e.target.value, true);
+    };
+  }
+
+  colorInputs.own.addEventListener('input', onColorInput('own'));
+  colorInputs.opponent.addEventListener('input', onColorInput('opponent'));
+
+  btnResetColors.addEventListener('click', function () {
+    anime({
+      targets: btnResetColors,
+      scale: [1, 0.92, 1],
+      duration: 320,
+      easing: 'easeOutQuad'
+    });
+    setTeamColor('own', DEFAULT_COLORS.own, true);
+    setTeamColor('opponent', DEFAULT_COLORS.opponent, true);
+  });
+
+  loadColors();
+  refreshColorControls();
 
   loadPlayers();
   renderAllPlayers();
