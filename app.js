@@ -1078,56 +1078,229 @@ btnMenu.addEventListener('click', function () {
 
   var presets = [];        /* { id, name, savedAt, orientation, colors, players } */
   var currentPresetId = null; /* последний загруженный пресет */
-  var selectedPresetId = null; /* выбранный в списке пресет */
 
-  var presetForm = document.getElementById('preset-form');
-  var presetNameInput = document.getElementById('preset-name');
-  var formationSelect = document.getElementById('formation-select');
-  var btnApplyFormation = document.getElementById('btn-apply-formation');
   var presetListEl = document.getElementById('preset-list');
   var presetEmptyEl = document.getElementById('preset-empty');
-  var presetMsgEl = document.getElementById('preset-msg');
+  var btnSavePreset = document.getElementById('btn-save-preset');
+  var btnFormations = document.getElementById('btn-formations');
   var btnExportPresets = document.getElementById('btn-export-presets');
   var btnImportPresets = document.getElementById('btn-import-presets');
   var fileImportPresets = document.getElementById('file-import-presets');
   var modeLabel = document.getElementById('mode');
-  var presetActionButtons = {
-    load: document.getElementById('btn-load-preset'),
-    overwrite: document.getElementById('btn-overwrite-preset'),
-    rename: document.getElementById('btn-rename-preset'),
-    duplicate: document.getElementById('btn-duplicate-preset'),
-    del: document.getElementById('btn-delete-preset')
-  };
 
-  var presetMsgTimer = null;
+  /* ── Toast: всплывающее уведомление внизу ──── */
 
-  function presetMsg(text, isError) {
-    if (!presetMsgEl) return;
-    if (presetMsgTimer) { clearTimeout(presetMsgTimer); presetMsgTimer = null; }
-    presetMsgEl.hidden = false;
-    presetMsgEl.style.opacity = '';
-    presetMsgEl.textContent = text;
-    presetMsgEl.classList.toggle('err', !!isError);
-    presetMsgEl.classList.toggle('ok', !isError);
+  var toastEl = null;
+  var toastTimer = null;
+
+  function toast(text, isError) {
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    if (toastEl) { toastEl.remove(); toastEl = null; }
+    toastEl = document.createElement('div');
+    toastEl.className = 'toast' + (isError ? ' toast-error' : '');
+    toastEl.setAttribute('role', 'status');
+    toastEl.textContent = text;
+    document.body.appendChild(toastEl);
     anime({
-      targets: presetMsgEl,
+      targets: toastEl,
       opacity: [0, 1],
-      translateY: [-4, 0],
+      translateY: [16, 0],
       duration: 260,
-      easing: 'easeOutQuad'
+      easing: 'easeOutCubic'
     });
-    presetMsgTimer = setTimeout(function () {
+    toastTimer = setTimeout(function () {
       anime({
-        targets: presetMsgEl,
+        targets: toastEl,
         opacity: 0,
-        duration: 300,
+        translateY: [0, 10],
+        duration: 240,
         easing: 'easeInQuad',
         complete: function () {
-          presetMsgEl.hidden = true;
-          presetMsgEl.style.opacity = '';
+          if (toastEl) { toastEl.remove(); toastEl = null; }
         }
       });
-    }, 4200);
+    }, 2600);
+  }
+
+  /* ── Универсальное модальное окно ──────────── */
+
+  /* opts: { title, text, content, buttons: [{ label, className, submit, action }] }
+     action(ctx) вызывается при клике; чтобы окно осталось открытым,
+     action должен вернуть true. Возвращает контекст модального окна. */
+  function openModal(opts) {
+    opts = opts || {};
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    var card = document.createElement('div');
+    card.className = 'modal-card';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    overlay.appendChild(card);
+
+    var titleEl = document.createElement('h3');
+    titleEl.className = 'modal-title';
+    titleEl.textContent = opts.title || '';
+    if (titleEl.textContent) card.appendChild(titleEl);
+
+    if (opts.text) {
+      var textEl = document.createElement('p');
+      textEl.className = 'modal-text';
+      textEl.textContent = opts.text;
+      card.appendChild(textEl);
+    }
+
+    var body = document.createElement('div');
+    body.className = 'modal-body';
+    if (opts.content) body.appendChild(opts.content);
+    card.appendChild(body);
+
+    var errorEl = document.createElement('p');
+    errorEl.className = 'modal-error';
+    errorEl.hidden = true;
+    card.appendChild(errorEl);
+
+    var actions = document.createElement('div');
+    actions.className = 'modal-actions';
+    card.appendChild(actions);
+
+    var submitBtn = null;
+    var buttons = opts.buttons && opts.buttons.length ? opts.buttons : [{ label: 'Отмена', className: 'ghost' }];
+    buttons.forEach(function (b) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'modal-btn' + (b.className ? ' ' + b.className : '');
+      btn.textContent = b.label;
+      if (b.submit) submitBtn = btn;
+      btn.addEventListener('click', function () {
+        var keepOpen = b.action ? b.action(ctx) === true : false;
+        if (!keepOpen) closeModal();
+      });
+      actions.appendChild(btn);
+    });
+
+    document.body.appendChild(overlay);
+
+    var prevActive = document.activeElement;
+    var closed = false;
+
+    function closeModal() {
+      if (closed) return;
+      closed = true;
+      document.removeEventListener('keydown', onKey, true);
+      anime({ targets: overlay, opacity: [1, 0], duration: 200, easing: 'easeInQuad' });
+      anime({
+        targets: card,
+        translateY: [0, 14],
+        scale: [1, 0.95],
+        opacity: [1, 0],
+        duration: 200,
+        easing: 'easeInQuad',
+        complete: function () {
+          overlay.remove();
+          if (prevActive && prevActive.focus && !document.querySelector('.modal-overlay')) {
+            prevActive.focus();
+          }
+        }
+      });
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeModal();
+        return;
+      }
+      if (e.key === 'Enter' && !e.isComposing && submitBtn &&
+          !(e.target && e.target.closest && e.target.closest('button'))) {
+        e.preventDefault();
+        submitBtn.click();
+      }
+    }
+    document.addEventListener('keydown', onKey, true);
+
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeModal();
+    });
+
+    var ctx = {
+      card: card,
+      body: body,
+      errorEl: errorEl,
+      close: closeModal,
+      setError: function (msg) {
+        errorEl.textContent = msg;
+        errorEl.hidden = false;
+        anime({
+          targets: errorEl,
+          translateX: [-6, 6, -4, 4, 0],
+          duration: 320,
+          easing: 'easeOutQuad'
+        });
+      },
+      clearError: function () {
+        errorEl.hidden = true;
+        errorEl.textContent = '';
+      }
+    };
+
+    anime({ targets: overlay, opacity: [0, 1], duration: 220, easing: 'easeOutQuad' });
+    anime({
+      targets: card,
+      translateY: [18, 0],
+      scale: [0.95, 1],
+      opacity: [0, 1],
+      duration: 250,
+      easing: 'easeOutCubic'
+    });
+
+    var firstInput = card.querySelector('input, select, textarea');
+    if (firstInput) firstInput.focus();
+    else if (submitBtn) submitBtn.focus();
+
+    return ctx;
+  }
+
+  /* ОКно с полем ввода названия (обязательное) */
+  function nameModal(title, initial, onConfirm) {
+    var content = document.createElement('div');
+    content.className = 'modal-input-wrap';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'player-input modal-input';
+    input.placeholder = 'Название пресета';
+    input.maxLength = 60;
+    input.value = initial || '';
+    content.appendChild(input);
+
+    var ctx = openModal({
+      title: title,
+      content: content,
+      buttons: [
+        { label: 'Отмена', className: 'ghost' },
+        {
+          label: 'Сохранить',
+          className: 'primary',
+          submit: true,
+          action: function (mctx) {
+            var name = input.value.trim();
+            if (!name) {
+              mctx.setError('Введите название пресета');
+              input.classList.add('input-error');
+              animateShake(input);
+              input.focus();
+              return true;
+            }
+            onConfirm(name);
+          }
+        }
+      ]
+    });
+
+    input.addEventListener('input', function () {
+      input.classList.remove('input-error');
+      ctx.clearError();
+    });
   }
 
   function makePresetId() {
@@ -1223,7 +1396,6 @@ btnMenu.addEventListener('click', function () {
     }
     var cur = storageGet(CURRENT_PRESET_KEY);
     if (cur && findPreset(cur)) currentPresetId = cur;
-    selectedPresetId = currentPresetId;
   }
 
   function initPresets() {
@@ -1244,14 +1416,6 @@ btnMenu.addEventListener('click', function () {
     }
   }
 
-  function updatePresetButtons() {
-    var has = !!selectedPresetId && !!findPreset(selectedPresetId);
-    Object.keys(presetActionButtons).forEach(function (key) {
-      var btn = presetActionButtons[key];
-      if (btn) btn.disabled = !has;
-    });
-  }
-
   function renderPresetList() {
     if (!presetListEl) return;
     presetListEl.innerHTML = '';
@@ -1259,7 +1423,7 @@ btnMenu.addEventListener('click', function () {
     presets.forEach(function (p) {
       var li = document.createElement('li');
       li.className = 'preset-item';
-      if (p.id === selectedPresetId) li.classList.add('active');
+      if (p.id === currentPresetId) li.classList.add('active');
       li.dataset.id = p.id;
 
       var nameEl = document.createElement('div');
@@ -1272,17 +1436,9 @@ btnMenu.addEventListener('click', function () {
       dateEl.textContent = formatPresetDate(p.savedAt);
       li.appendChild(dateEl);
 
-      li.addEventListener('click', function () { selectPreset(p.id); });
-      li.addEventListener('dblclick', function () { loadPreset(p.id); });
+      li.addEventListener('click', function () { openPresetActions(p); });
       presetListEl.appendChild(li);
     });
-    updatePresetButtons();
-  }
-
-  function selectPreset(id) {
-    if (selectedPresetId === id) return;
-    selectedPresetId = id;
-    renderPresetList();
   }
 
   /* Плавное исчезновение круга с поля */
@@ -1441,117 +1597,139 @@ btnMenu.addEventListener('click', function () {
   function loadPreset(id) {
     var p = findPreset(id);
     if (!p) {
-      presetMsg('Пресет не найден', true);
+      toast('Пресет не найден', true);
       return;
     }
     applyPresetState(p, true);
-    presetMsg('Пресет загружен: ' + p.name);
+    toast('Пресет загружен: ' + p.name);
   }
 
-  function requireSelected() {
-    var p = findPreset(selectedPresetId);
-    if (!p) presetMsg('Сначала выберите пресет в списке', true);
-    return p;
+  /* Есть ли несохранённые изменения относительно загруженного пресета */
+  function hasUnsavedChanges() {
+    if (!currentPresetId) return false;
+    var p = findPreset(currentPresetId);
+    if (!p) return false;
+    var snap = snapshotPreset();
+    return JSON.stringify([snap.orientation, snap.colors, snap.players]) !==
+      JSON.stringify([p.orientation, p.colors, p.players]);
   }
 
-  presetForm.addEventListener('submit', function (e) {
-    e.preventDefault();
-    var name = presetNameInput.value.trim();
-    if (!name) {
-      presetNameInput.classList.add('input-error');
-      presetNameInput.focus();
-      animateShake(presetNameInput);
-      presetMsg('Введите название пресета', true);
-      return;
-    }
-    presetNameInput.classList.remove('input-error');
-    var snapshot = snapshotPreset();
-    var preset = {
-      id: makePresetId(),
-      name: name,
-      savedAt: new Date().toISOString(),
-      orientation: snapshot.orientation,
-      colors: snapshot.colors,
-      players: snapshot.players
-    };
-    presets.push(preset);
-    currentPresetId = preset.id;
-    selectedPresetId = preset.id;
-    persistPresets();
-    renderPresetList();
-    presetNameInput.value = '';
-    presetMsg('Пресет сохранён: ' + name);
-  });
-
-  presetNameInput.addEventListener('input', function () {
-    presetNameInput.classList.remove('input-error');
-  });
-
-  presetActionButtons.load.addEventListener('click', function () {
-    if (requireSelected()) loadPreset(selectedPresetId);
-  });
-
-  presetActionButtons.overwrite.addEventListener('click', function () {
-    var p = requireSelected();
-    if (!p) return;
-    var snapshot = snapshotPreset();
-    p.orientation = snapshot.orientation;
-    p.colors = snapshot.colors;
-    p.players = snapshot.players;
+  function overwritePreset(p) {
+    var snap = snapshotPreset();
+    p.orientation = snap.orientation;
+    p.colors = snap.colors;
+    p.players = snap.players;
     p.savedAt = new Date().toISOString();
     currentPresetId = p.id;
     persistPresets();
     renderPresetList();
-    presetMsg('Пресет перезаписан: ' + p.name);
-  });
+    toast('Пресет перезаписан: ' + p.name);
+  }
 
-  presetActionButtons.rename.addEventListener('click', function () {
-    var p = requireSelected();
+  function deletePresetById(id) {
+    var p = findPreset(id);
     if (!p) return;
-    var name = prompt('Новое название пресета', p.name);
-    if (name === null) return;
-    name = name.trim();
-    if (!name) {
-      presetMsg('Название не может быть пустым', true);
-      return;
+    presets = presets.filter(function (item) { return item.id !== id; });
+    if (currentPresetId === id) currentPresetId = null;
+    persistPresets();
+    renderPresetList();
+    toast('Пресет удалён: ' + p.name);
+  }
+
+  /* Модальные окна действий */
+
+  function requestLoadPreset(p) {
+    if (hasUnsavedChanges()) {
+      openModal({
+        title: 'Загрузить пресет?',
+        text: 'Есть несохранённые изменения. Загрузить «' + p.name + '» и заменить текущую расстановку?',
+        buttons: [
+          { label: 'Отмена', className: 'ghost' },
+          { label: 'Загрузить', className: 'primary', action: function () { loadPreset(p.id); } }
+        ]
+      });
+    } else {
+      loadPreset(p.id);
     }
-    p.name = name;
-    persistPresets();
-    renderPresetList();
-    presetMsg('Пресет переименован: ' + name);
-  });
+  }
 
-  presetActionButtons.duplicate.addEventListener('click', function () {
-    var p = requireSelected();
-    if (!p) return;
-    var name = prompt('Название копии', p.name + ' — копия');
-    if (name === null) return;
-    name = name.trim();
-    if (!name) {
-      presetMsg('Название не может быть пустым', true);
-      return;
-    }
-    var copy = normalizePreset(JSON.parse(JSON.stringify(p)));
-    do { copy.id = makePresetId(); } while (findPreset(copy.id));
-    copy.name = name;
-    copy.savedAt = new Date().toISOString();
-    presets.push(copy);
-    selectedPresetId = copy.id;
-    persistPresets();
-    renderPresetList();
-    presetMsg('Создана копия: ' + name);
-  });
+  function confirmOverwrite(p) {
+    openModal({
+      title: 'Перезаписать пресет?',
+      text: 'Пресет «' + p.name + '» будет заменён текущей расстановкой.',
+      buttons: [
+        { label: 'Отмена', className: 'ghost' },
+        { label: 'Перезаписать', className: 'primary', action: function () { overwritePreset(p); } }
+      ]
+    });
+  }
 
-  presetActionButtons.del.addEventListener('click', function () {
-    var p = requireSelected();
-    if (!p) return;
-    if (!confirm('Удалить пресет «' + p.name + '»?')) return;
-    presets = presets.filter(function (item) { return item.id !== p.id; });
-    if (currentPresetId === p.id) currentPresetId = null;
-    selectedPresetId = null;
-    persistPresets();
-    renderPresetList();
-    presetMsg('Пресет удалён: ' + p.name);
+  function confirmDelete(p) {
+    openModal({
+      title: 'Удалить пресет?',
+      text: 'Пресет «' + p.name + '» будет удалён безвозвратно.',
+      buttons: [
+        { label: 'Отмена', className: 'ghost' },
+        { label: 'Удалить', className: 'danger', action: function () { deletePresetById(p.id); } }
+      ]
+    });
+  }
+
+  function renameModal(p) {
+    nameModal('Переименовать пресет', p.name, function (name) {
+      p.name = name;
+      persistPresets();
+      renderPresetList();
+      toast('Пресет переименован: ' + name);
+    });
+  }
+
+  function duplicateModal(p) {
+    nameModal('Дублировать пресет', p.name + ' — копия', function (name) {
+      var copy = normalizePreset(JSON.parse(JSON.stringify(p)));
+      do { copy.id = makePresetId(); } while (findPreset(copy.id));
+      copy.name = name;
+      copy.savedAt = new Date().toISOString();
+      presets.push(copy);
+      persistPresets();
+      renderPresetList();
+      toast('Создана копия: ' + name);
+    });
+  }
+
+  /* Клик по карточке пресета: окно со всеми действиями */
+  function openPresetActions(p) {
+    openModal({
+      title: p.name,
+      text: 'Сохранён: ' + (formatPresetDate(p.savedAt) || 'неизвестно когда'),
+      buttons: [
+        { label: 'Загрузить', className: 'primary', action: function () { requestLoadPreset(p); } },
+        { label: 'Перезаписать', action: function () { confirmOverwrite(p); } },
+        { label: 'Переименовать', action: function () { renameModal(p); } },
+        { label: 'Дублировать', action: function () { duplicateModal(p); } },
+        { label: 'Удалить', className: 'danger', action: function () { confirmDelete(p); } }
+      ]
+    });
+  }
+
+  /* Сохранить текущую расстановку как новый пресет */
+  btnSavePreset.addEventListener('click', function () {
+    nameModal('Сохранить как новый', '', function (name) {
+      var snapshot = snapshotPreset();
+      var preset = {
+        id: makePresetId(),
+        name: name,
+        savedAt: new Date().toISOString(),
+        orientation: snapshot.orientation,
+        colors: snapshot.colors,
+        players: snapshot.players
+      };
+      presets.push(preset);
+      currentPresetId = preset.id;
+      persistPresets();
+      renderPresetList();
+      toast('Пресет сохранён: ' + name);
+    });
   });
 
   /* ── Готовые схемы расстановки ─────────────── */
@@ -1577,19 +1755,10 @@ btnMenu.addEventListener('click', function () {
     return slots;
   }
 
-  btnApplyFormation.addEventListener('click', function () {
-    anime({
-      targets: btnApplyFormation,
-      scale: [1, 0.92, 1],
-      duration: 320,
-      easing: 'easeOutQuad'
-    });
-    var key = formationSelect.value;
-    if (!FORMATIONS[key]) {
-      presetMsg('Выберите схему расстановки', true);
-      return;
-    }
-    var slots = formationSlots(FORMATIONS[key]);
+  function doApplyFormation(key) {
+    var counts = FORMATIONS[key];
+    if (!counts) return;
+    var slots = formationSlots(counts);
     var starters = players.filter(function (p) {
       return p.team === 'own' && p.status === 'start';
     });
@@ -1603,7 +1772,57 @@ btnMenu.addEventListener('click', function () {
     savePlayers();
     if (modeLabel) modeLabel.textContent = 'Схема ' + key;
     syncTokensToPlayers(true);
-    presetMsg('Схема ' + key + ': на поле ' + placed + ' из ' + starters.length);
+    toast('Схема ' + key + ': на поле ' + placed + ' из ' + starters.length);
+  }
+
+  /* Маленькое превью схемы точками на своём полу поля */
+  function buildFormationPreview(counts) {
+    var box = document.createElement('span');
+    box.className = 'formation-preview';
+    formationSlots(counts).forEach(function (slot) {
+      var dot = document.createElement('span');
+      dot.className = 'formation-dot';
+      dot.style.left = (slot.x * 100) + '%';
+      dot.style.top = (slot.y * 100) + '%';
+      box.appendChild(dot);
+    });
+    return box;
+  }
+
+  function openFormationsModal() {
+    var content = document.createElement('div');
+    content.className = 'formation-grid';
+    var ctx = openModal({
+      title: 'Схемы расстановки',
+      text: 'Схема расставит основной состав на своей половине поля.',
+      content: content,
+      buttons: [{ label: 'Отмена', className: 'ghost' }]
+    });
+    Object.keys(FORMATIONS).forEach(function (key) {
+      var cardBtn = document.createElement('button');
+      cardBtn.type = 'button';
+      cardBtn.className = 'formation-card';
+      cardBtn.appendChild(buildFormationPreview(FORMATIONS[key]));
+      var label = document.createElement('span');
+      label.className = 'formation-card-label';
+      label.textContent = key;
+      cardBtn.appendChild(label);
+      cardBtn.addEventListener('click', function () {
+        ctx.close();
+        doApplyFormation(key);
+      });
+      content.appendChild(cardBtn);
+    });
+  }
+
+  btnFormations.addEventListener('click', function () {
+    anime({
+      targets: btnFormations,
+      scale: [1, 0.92, 1],
+      duration: 320,
+      easing: 'easeOutQuad'
+    });
+    openFormationsModal();
   });
 
   /* ── Появление при загрузке ────────────────── */
@@ -1631,13 +1850,7 @@ btnMenu.addEventListener('click', function () {
 
   /* ── Экспорт и импорт пресетов ─────────────── */
 
-  btnExportPresets.addEventListener('click', function () {
-    var chosen = findPreset(selectedPresetId);
-    var list = chosen ? [chosen] : presets;
-    if (!list.length) {
-      presetMsg('Нет пресетов для экспорта', true);
-      return;
-    }
+  function exportPresets(list, label) {
     var payload = {
       app: 'football-board',
       type: 'presets',
@@ -1654,47 +1867,94 @@ btnMenu.addEventListener('click', function () {
       a.click();
       a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      presetMsg('Экспортировано пресетов: ' + list.length + (chosen ? ' (выбранный)' : ' (все)'));
+      toast('Экспортировано пресетов: ' + list.length + ' (' + label + ')');
     } catch (e) {
-      presetMsg('Не удалось экспортировать пресеты', true);
+      toast('Не удалось экспортировать пресеты', true);
     }
-  });
+  }
 
-  btnImportPresets.addEventListener('click', function () {
-    anime({
-      targets: btnImportPresets,
-      scale: [1, 0.92, 1],
-      duration: 320,
-      easing: 'easeOutQuad'
+  function openExportModal() {
+    if (!presets.length) {
+      toast('Нет пресетов для экспорта', true);
+      return;
+    }
+    var current = findPreset(currentPresetId);
+    var buttons = [];
+    if (current) {
+      buttons.push({
+        label: 'Выбранный пресет',
+        className: 'primary',
+        action: function () { exportPresets([current], 'выбранный'); }
+      });
+      buttons.push({
+        label: 'Все пресеты',
+        action: function () { exportPresets(presets, 'все'); }
+      });
+    } else {
+      buttons.push({
+        label: 'Все пресеты',
+        className: 'primary',
+        action: function () { exportPresets(presets, 'все'); }
+      });
+    }
+    buttons.push({ label: 'Отмена', className: 'ghost' });
+    openModal({
+      title: 'Экспорт пресетов',
+      text: current
+        ? 'Скачать JSON: выбранный пресет «' + current.name + '» или все пресеты.'
+        : 'Загруженный пресет отсутствует, можно скачать все пресеты.',
+      buttons: buttons
     });
-    fileImportPresets.value = '';
-    fileImportPresets.click();
-  });
+  }
 
-  fileImportPresets.addEventListener('change', function () {
-    var file = fileImportPresets.files && fileImportPresets.files[0];
-    if (!file) return;
-    var reader = new FileReader();
-    reader.onload = function () {
-      importPresetsFromText(String(reader.result));
-    };
-    reader.onerror = function () {
-      presetMsg('Не удалось прочитать файл', true);
-    };
-    try {
-      reader.readAsText(file);
-    } catch (e) {
-      presetMsg('Не удалось прочитать файл', true);
-    }
-  });
+  function openImportModal() {
+    var content = document.createElement('div');
+    content.className = 'modal-input-wrap';
+    var pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'modal-btn primary modal-file-btn';
+    pick.textContent = 'Выбрать файл';
+    content.appendChild(pick);
 
+    var ctx = openModal({
+      title: 'Импорт пресетов',
+      text: 'Выберите JSON-файл, экспортированный с этой доски.',
+      content: content,
+      buttons: [{ label: 'Отмена', className: 'ghost' }]
+    });
+
+    pick.addEventListener('click', function () {
+      fileImportPresets.value = '';
+      fileImportPresets.click();
+    });
+
+    fileImportPresets.onchange = function () {
+      var file = fileImportPresets.files && fileImportPresets.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var err = importPresetsFromText(String(reader.result));
+        if (err) ctx.setError(err);
+        else ctx.close();
+      };
+      reader.onerror = function () {
+        ctx.setError('Не удалось прочитать файл');
+      };
+      try {
+        reader.readAsText(file);
+      } catch (e) {
+        ctx.setError('Не удалось прочитать файл');
+      }
+    };
+  }
+
+  /* Возвращает текст ошибки для показа в окне импорта или null при успехе */
   function importPresetsFromText(text) {
     var data;
     try {
       data = JSON.parse(text);
     } catch (e) {
-      presetMsg('Не удалось импортировать: файл повреждён или это не JSON', true);
-      return;
+      return 'Файл повреждён или это не JSON. Импорт не выполнен.';
     }
     var rawList = null;
     if (Array.isArray(data)) {
@@ -1704,8 +1964,7 @@ btnMenu.addEventListener('click', function () {
       else if (Array.isArray(data.players)) rawList = [data]; /* одиночный пресет */
     }
     if (!rawList) {
-      presetMsg('Не удалось импортировать: неверный формат файла', true);
-      return;
+      return 'Неверный формат файла: ожидается список пресетов, экспортированный с этой доски.';
     }
     var imported = [];
     rawList.forEach(function (raw) {
@@ -1715,14 +1974,34 @@ btnMenu.addEventListener('click', function () {
       imported.push(np);
     });
     if (!imported.length) {
-      presetMsg('В файле нет корректных пресетов', true);
-      return;
+      return 'В файле нет корректных пресетов. Импорт не выполнен.';
     }
     imported.forEach(function (np) { presets.push(np); });
     persistPresets();
     renderPresetList();
-    presetMsg('Импортировано пресетов: ' + imported.length);
+    toast('Импортировано пресетов: ' + imported.length);
+    return null;
   }
+
+  btnExportPresets.addEventListener('click', function () {
+    anime({
+      targets: btnExportPresets,
+      scale: [1, 0.92, 1],
+      duration: 320,
+      easing: 'easeOutQuad'
+    });
+    openExportModal();
+  });
+
+  btnImportPresets.addEventListener('click', function () {
+    anime({
+      targets: btnImportPresets,
+      scale: [1, 0.92, 1],
+      duration: 320,
+      easing: 'easeOutQuad'
+    });
+    openImportModal();
+  });
 
   /* ── Старт ─────────────────────────────────── */
 
