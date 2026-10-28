@@ -395,7 +395,157 @@ select.player-input {
   display: block;
   border-radius: 8px;
   box-shadow: var(--shadow);
+  transition: box-shadow 0.25s;
   /* SVG сохраняет пропорции благодаря viewBox + preserveAspectRatio */
+}
+
+#field.drop-ready {
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.4), var(--shadow);
+}
+
+/* ── Игроки на поле ─────────────────────────── */
+
+.tokens-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.token {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.token:active {
+  cursor: grabbing;
+}
+
+.token.removing {
+  pointer-events: none;
+}
+
+.token-scale {
+  will-change: transform, opacity;
+}
+
+.token-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.token-disc {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.token-own .token-disc {
+  background: #2563eb;
+}
+
+.token-opponent .token-disc {
+  background: #dc2626;
+}
+
+.token-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Перетаскивание ─────────────────────────── */
+
+.drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+.drag-ghost.ghost-own {
+  background: #2563eb;
+}
+
+.drag-ghost.ghost-opponent {
+  background: #dc2626;
+}
+
+.player-card {
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.player-card:active {
+  cursor: grabbing;
+}
+
+/* Кнопки и поля ввода карточки работают как обычно */
+.player-card button,
+.player-card input,
+.player-card select {
+  touch-action: auto;
+  cursor: pointer;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.player-card.drag-source {
+  opacity: 0.45;
+}
+
+.player-card.on-field {
+  opacity: 0.55;
+}
+
+.on-field-badge {
+  display: none;
+  margin-left: 6px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #64748b;
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.player-card.on-field .on-field-badge {
+  display: inline-block;
 }
 
 /* ── Скроллбар ──────────────────────────────── */
