@@ -33,6 +33,38 @@
       </section>
 
       <section class="panel fade-item">
+        <h2 class="panel-title">Составы</h2>
+        <form id="player-form" class="player-form" autocomplete="off">
+          <input id="player-name" class="player-input" type="text" placeholder="Имя игрока" maxlength="40">
+          <input id="player-number" class="player-input player-number" type="text" inputmode="numeric" placeholder="№ (необяз.)" maxlength="3">
+          <select id="player-target" class="player-input" title="Куда добавить игрока">
+            <option value="own-start">Основной состав</option>
+            <option value="own-bench">Запасные</option>
+            <option value="opponent">Соперник</option>
+          </select>
+          <button type="submit" class="player-add-btn">Добавить</button>
+        </form>
+
+        <div class="roster">
+          <div class="roster-group">
+            <h3 class="roster-title">Основной состав</h3>
+            <ul class="player-list" id="list-start"></ul>
+            <p class="list-empty" hidden>Пока нет игроков</p>
+          </div>
+          <div class="roster-group">
+            <h3 class="roster-title">Запасные</h3>
+            <ul class="player-list" id="list-bench"></ul>
+            <p class="list-empty" hidden>Пока нет игроков</p>
+          </div>
+          <div class="roster-group">
+            <h3 class="roster-title">Соперник</h3>
+            <ul class="player-list" id="list-opponent"></ul>
+            <p class="list-empty" hidden>Пока нет игроков</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel fade-item">
         <h2 class="panel-title">Действия</h2>
         <div class="tool-grid">
           <button class="tool-btn" data-action="clear" title="Очистить поле">Очистить</button>
@@ -50,7 +82,7 @@
       </section>
 
       <footer class="sidebar-footer fade-item">
-        Этап 1 · Макет страницы
+        Этап 2 · Составы команд
       </footer>
     </aside>
 

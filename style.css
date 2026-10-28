@@ -197,6 +197,174 @@ body {
   padding: 6px 0 2px;
 }
 
+/* ── Составы команд ─────────────────────────── */
+
+.player-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.player-input {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s, background 0.3s, color 0.3s;
+}
+
+.player-input:focus {
+  border-color: var(--accent);
+}
+
+#player-name,
+#player-number,
+#player-target {
+  grid-column: 1 / -1;
+}
+
+select.player-input {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.player-add-btn {
+  grid-column: 1 / -1;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+
+.player-add-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+.player-add-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.roster {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roster-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.player-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 4px;
+}
+
+.player-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--bg);
+}
+
+.player-name {
+  font-size: 13px;
+  font-weight: 600;
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.player-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.mini-btn {
+  font-family: inherit;
+  font-size: 10.5px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.mini-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mini-btn.danger:hover {
+  color: #e11d48;
+  border-color: #e11d48;
+  background: rgba(225, 29, 72, 0.08);
+}
+
+.mini-btn.primary {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.mini-btn.primary:hover {
+  color: #ffffff;
+  filter: brightness(1.08);
+}
+
+.player-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.player-edit .player-input {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.list-empty {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.player-card.removing {
+  pointer-events: none;
+}
+
 /* ── Поле ───────────────────────────────────── */
 
 .field-area {
