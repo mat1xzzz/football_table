@@ -315,13 +315,13 @@ btnMenu.addEventListener('click', function () {
       if (e.key === 'Escape') endEdit(p.id, false);
     });
 
-    refreshCard(p);
+    refreshCard(p, li);
     cardEls[p.id] = li;
     return li;
   }
 
-  function refreshCard(p) {
-    var li = cardEls[p.id];
+  function refreshCard(p, cardEl) {
+    var li = cardEl || cardEls[p.id];
     if (!li) return;
     li.querySelector('.player-name').textContent = p.number ? '№' + p.number + ' ' + p.name : p.name;
     var moveBtn = li.querySelector('.move-btn');
