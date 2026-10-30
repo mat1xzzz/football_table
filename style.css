@@ -116,6 +116,21 @@ body {
   color: #ffffff;
 }
 
+/* Неактивные кнопки Отменить/Повторить выглядят затемнёнными */
+.tool-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tool-btn:disabled:hover,
+.tool-btn:disabled:active {
+  background: var(--bg-panel);
+  border-color: var(--border);
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+}
+
 /* ── Рабочая область ────────────────────────── */
 
 .workspace {
@@ -566,6 +581,35 @@ select.player-input {
   max-width: calc(var(--player-size, 50px) * 3.235);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Мяч ────────────────────────────────────── */
+
+.token-ball {
+  z-index: 5;
+}
+
+/* --ball-size (диаметр мяча в px) задаёт app.js от ширины поля */
+.token-ball .ball-disc {
+  width: var(--ball-size, 26px);
+  height: var(--ball-size, 26px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 33% 30%, #ffffff 0 52%, #d6d9de 100%);
+  border: calc(var(--ball-size, 26px) * 0.075) solid rgba(17, 24, 39, 0.65);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Тёмный пятиугольник — центр мяча */
+.token-ball .ball-disc::before {
+  content: "";
+  width: 44%;
+  height: 44%;
+  background: #111827;
+  clip-path: polygon(50% 0%, 100% 36%, 81% 100%, 19% 100%, 0% 36%);
+  opacity: 0.92;
 }
 
 /* ── Перетаскивание ─────────────────────────── */

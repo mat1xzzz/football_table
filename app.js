@@ -39,6 +39,9 @@ var FIELD_ASPECT = 1200 / 780;
 var PLAYER_REFERENCE_WIDTH = 1200;
 var PLAYER_RADIUS = 17 * 1.05 * 2 * 0.7;
 
+/* Диаметр мяча: тоже задан относительно ширины поля (эталон 1200) */
+var BALL_DIAMETER = 26;
+
 var state = {
   orientation: 'horizontal' /* 'horizontal' | 'vertical' */
 };
@@ -92,6 +95,8 @@ function setPlayerSize() {
   var W = rotator.offsetWidth || PLAYER_REFERENCE_WIDTH;
   var d = PLAYER_RADIUS * 2 / PLAYER_REFERENCE_WIDTH * W;
   rotator.style.setProperty('--player-size', d.toFixed(2) + 'px');
+  var db = BALL_DIAMETER / PLAYER_REFERENCE_WIDTH * W;
+  rotator.style.setProperty('--ball-size', db.toFixed(2) + 'px');
 }
 
 function applyOrientation(animate) {
@@ -157,6 +162,10 @@ btnMenu.addEventListener('click', function () {
   var counter = document.getElementById('counter');
   var count = 0;
 
+  /* Мяч: позиция в долях 0–1 или null (мяча нет на поле) */
+  var ball = { pos: null };
+  var ballEl = null;
+
   document.querySelectorAll('.tool-grid .tool-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
       if (!btn.dataset.action) {
@@ -175,6 +184,15 @@ btnMenu.addEventListener('click', function () {
 
       if (btn.dataset.action === 'clear') {
         clearField();
+      }
+      if (btn.dataset.action === 'ball') {
+        toggleBall();
+      }
+      if (btn.dataset.action === 'undo') {
+        undoHistory();
+      }
+      if (btn.dataset.action === 'redo') {
+        redoHistory();
       }
     });
   });
@@ -407,6 +425,7 @@ btnMenu.addEventListener('click', function () {
     players.push(p);
     savePlayers();
     appendCard(p, true);
+    pushHistory();
   }
 
   function removePlayer(id) {
@@ -414,6 +433,7 @@ btnMenu.addEventListener('click', function () {
     var token = tokenEls ? tokenEls[id] : null;
     players = players.filter(function (p) { return p.id !== id; });
     savePlayers();
+    pushHistory();
     delete cardEls[id];
     if (token) {
       delete tokenEls[id];
@@ -445,6 +465,7 @@ btnMenu.addEventListener('click', function () {
     p.status = p.status === 'start' ? 'bench' : 'start';
     savePlayers();
     refreshCard(p);
+    pushHistory();
 
     /* Анимация перелёта (FLIP): запоминаем позицию до, переносим, летим из разницы */
     var first = card.getBoundingClientRect();
@@ -495,6 +516,7 @@ btnMenu.addEventListener('click', function () {
       p.name = box.querySelector('.edit-name').value.trim();
       savePlayers();
       updateTokenText(p);
+      pushHistory();
     }
     card.classList.remove('editing');
     box.hidden = true;
@@ -610,11 +632,12 @@ btnMenu.addEventListener('click', function () {
     return PLAYER_RADIUS / PLAYER_REFERENCE_WIDTH * W;
   }
 
-  /* Держит круг целиком внутри поля */
-  function clampPos(u, v) {
+  /* Держит круг (или мяч) целиком внутри поля.
+     radiusPx — радиус предмета в px; по умолчанию радиус игрока. */
+  function clampPos(u, v, radiusPx) {
     var W = rotator.offsetWidth || 1;
     var H = rotator.offsetHeight || 1;
-    var r = playerRadiusPx();
+    var r = radiusPx == null ? playerRadiusPx() : radiusPx;
     var mu = Math.min(0.5, r / W);
     var mv = Math.min(0.5, r / H);
     return {
@@ -744,6 +767,7 @@ btnMenu.addEventListener('click', function () {
     delete tokenEls[id];
     refreshCard(p);
     syncCounter();
+    pushHistory();
     if (!el) return;
     el.classList.add('removing');
     anime({
@@ -765,10 +789,28 @@ btnMenu.addEventListener('click', function () {
     }
   }
 
+  /* Окно подтверждения очистки (вместо confirm()) */
   function clearField() {
-    Object.keys(tokenEls).forEach(function (id) {
-      returnPlayerToSquad(id);
+    openModal({
+      title: 'Очистить поле?',
+      text: 'Все игроки вернутся в свои списки, мяч будет убран. Сами списки сохранятся.',
+      buttons: [
+        { label: 'Отмена', className: 'ghost' },
+        { label: 'Очистить', className: 'danger', action: function () { doClearField(); } }
+      ]
     });
+  }
+
+  function doClearField() {
+    players.forEach(function (p) {
+      p.pos = null;
+      refreshCard(p);
+    });
+    savePlayers();
+    removeBall();
+    syncTokensToPlayers(false);
+    pushHistory();
+    toast('Поле очищено');
   }
 
   function onFieldCount() {
@@ -869,6 +911,11 @@ btnMenu.addEventListener('click', function () {
     if (drag.type === 'ghost') {
       moveGhost(drag.ghost, e.clientX, e.clientY);
       setFieldHighlight(isOverField(e.clientX, e.clientY));
+    } else if (drag.type === 'ball') {
+      var ptB = localFieldPoint(e.clientX, e.clientY);
+      var posB = clampPos(ptB.u + drag.ox, ptB.v + drag.oy, ballRadiusPx());
+      drag.token.style.left = (posB.u * 100) + '%';
+      drag.token.style.top = (posB.v * 100) + '%';
     } else {
       var pt = localFieldPoint(e.clientX, e.clientY);
       var u = Math.min(1.5, Math.max(-0.5, pt.u + drag.ox));
@@ -896,6 +943,8 @@ btnMenu.addEventListener('click', function () {
     if (d.type === 'pending') return; /* был просто клик по карточке */
     if (d.type === 'ghost') {
       dropGhost(e.clientX, e.clientY, d);
+    } else if (d.type === 'ball') {
+      dropBall(e.clientX, e.clientY, d);
     } else {
       dropToken(e.clientX, e.clientY, d);
     }
@@ -911,6 +960,7 @@ btnMenu.addEventListener('click', function () {
       d.ghost.remove();
       d.card.classList.remove('drag-source');
       showToken(p);
+      pushHistory();
       return;
     }
     /* Мимо поля — призрак плавно возвращается на место */
@@ -938,6 +988,126 @@ btnMenu.addEventListener('click', function () {
     p.pos = { x: round4(pos.u), y: round4(pos.v) };
     savePlayers();
     placeToken(d.token, p);
+    pushHistory();
+  }
+
+  /* ── Мяч ─────────────────────────────────── */
+
+  /* Радиус мяча в px от текущей ширины поля */
+  function ballRadiusPx() {
+    var W = rotator.offsetWidth || PLAYER_REFERENCE_WIDTH;
+    return BALL_DIAMETER / 2 / PLAYER_REFERENCE_WIDTH * W;
+  }
+
+  function createBallEl() {
+    var el = document.createElement('div');
+    el.className = 'token token-ball';
+    var scale = document.createElement('div');
+    scale.className = 'token-scale';
+    var disc = document.createElement('div');
+    disc.className = 'ball-disc';
+    scale.appendChild(disc);
+    el.appendChild(scale);
+    return el;
+  }
+
+  /* Мяч на поле: при первом появлении — пружинный эффект */
+  function showBall(delay) {
+    if (!ball.pos) return;
+    if (!ballEl) {
+      var el = createBallEl();
+      placeToken(el, { pos: ball.pos });
+      tokensLayer.appendChild(el);
+      ballEl = el;
+      el.addEventListener('pointerdown', onBallPointerDown);
+      anime({
+        targets: el.querySelector('.token-scale'),
+        scale: [0, 1],
+        opacity: [0, 1],
+        duration: 900,
+        delay: delay || 0,
+        easing: 'easeOutElastic'
+      });
+    } else {
+      placeToken(ballEl, { pos: ball.pos });
+    }
+  }
+
+  function removeBall() {
+    ball.pos = null;
+    if (!ballEl) return;
+    var el = ballEl;
+    ballEl = null;
+    fadeOutTokenEl(el);
+  }
+
+  /* Кнопка «Добавить мяч»: если мяч уже на поле — убирает его */
+  function toggleBall() {
+    if (ball.pos) {
+      removeBall();
+    } else {
+      var pos = clampPos(0.5, 0.5, ballRadiusPx());
+      ball.pos = { x: round4(pos.u), y: round4(pos.v) };
+      showBall(0);
+    }
+    updateBallButton();
+    pushHistory();
+  }
+
+  function updateBallButton() {
+    if (btnAddBallEl) btnAddBallEl.textContent = ball.pos ? 'Убрать мяч' : 'Добавить мяч';
+  }
+
+  function onBallPointerDown(e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (!ball.pos || !ballEl) return;
+    e.preventDefault();
+    var pt = localFieldPoint(e.clientX, e.clientY);
+    drag = {
+      type: 'ball',
+      token: ballEl,
+      pointerId: e.pointerId,
+      ox: ball.pos.x - pt.u,
+      oy: ball.pos.y - pt.v
+    };
+    try { ballEl.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
+  }
+
+  /* Мяч всегда остаётся в границах поля, поэтому clamp на сбросе */
+  function dropBall(clientX, clientY, d) {
+    if (ballEl !== d.token) return;
+    var pt = localFieldPoint(clientX, clientY);
+    var pos = clampPos(pt.u + d.ox, pt.v + d.oy, ballRadiusPx());
+    ball.pos = { x: round4(pos.u), y: round4(pos.v) };
+    placeToken(ballEl, { pos: ball.pos });
+    pushHistory();
+  }
+
+  /* Приводит мяч в соответствие с состоянием: показать, переехать или убрать */
+  function syncBall(animated, delay) {
+    if (ball.pos) {
+      var pos = clampPos(ball.pos.x, ball.pos.y, ballRadiusPx());
+      ball.pos = { x: round4(pos.u), y: round4(pos.v) };
+      if (ballEl) {
+        var dragging = drag && drag.type === 'ball';
+        if (animated && !dragging) {
+          animateTokenTo(
+            ballEl,
+            pos,
+            600,
+            delay || 0,
+            rotator.offsetWidth || PLAYER_REFERENCE_WIDTH,
+            rotator.offsetHeight || rotator.offsetWidth / FIELD_ASPECT
+          );
+        } else {
+          placeToken(ballEl, { pos: ball.pos });
+        }
+      } else {
+        showBall(delay || 0);
+      }
+    } else if (ballEl) {
+      removeBall();
+    }
   }
 
   /* ── Цвета команд ─────────────────────────── */
@@ -1060,6 +1230,120 @@ btnMenu.addEventListener('click', function () {
 
   loadPlayers();
   renderAllPlayers();
+
+  /* ── История действий (Undo/Redo) ─────────── */
+
+  var HISTORY_LIMIT = 50;
+  var history = [];   /* снимки состояний; history[historyIndex] — текущее */
+  var historyIndex = -1;
+
+  var btnUndo = document.querySelector('[data-action="undo"]');
+  var btnRedo = document.querySelector('[data-action="redo"]');
+  var btnAddBallEl = document.getElementById('btn-add-ball');
+
+  /* Снимок: позиции кругов, мяч, составы и то, кто на поле */
+  function snapshotState() {
+    return {
+      ball: ball.pos ? { x: ball.pos.x, y: ball.pos.y } : null,
+      players: players.map(function (p) {
+        return {
+          id: p.id,
+          name: p.name,
+          number: p.number,
+          team: p.team,
+          status: p.status,
+          pos: p.pos ? { x: p.pos.x, y: p.pos.y } : null
+        };
+      })
+    };
+  }
+
+  function sameState(a, b) {
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+  }
+
+  /* Снимок добавляется после завершённого действия;
+     тривиальные повторные вызовы (без изменений) не засоряют историю */
+  function pushHistory() {
+    var snap = snapshotState();
+    if (historyIndex >= 0 && sameState(history[historyIndex], snap)) return;
+    history.splice(historyIndex + 1);
+    history.push(snap);
+    if (history.length > HISTORY_LIMIT) history.shift();
+    historyIndex = history.length - 1;
+    updateHistoryButtons();
+  }
+
+  function updateHistoryButtons() {
+    if (btnUndo) btnUndo.disabled = historyIndex <= 0;
+    if (btnRedo) btnRedo.disabled = historyIndex >= history.length - 1;
+  }
+
+  /* Восстановление состояния из снимка: карточки, круги и мяч */
+  function restoreSnapshot(snap, animated) {
+    players = snap.players.map(function (p) {
+      return {
+        id: p.id,
+        name: p.name,
+        number: p.number,
+        team: p.team,
+        status: p.status,
+        pos: p.pos ? { x: p.pos.x, y: p.pos.y } : null
+      };
+    });
+    savePlayers();
+    ball.pos = snap.ball ? { x: snap.ball.x, y: snap.ball.y } : null;
+
+    /* карточки исчезнувших игроков убираем, новые добавляем, раскладываем по спискам */
+    var keep = {};
+    players.forEach(function (p) { keep[p.id] = true; });
+    Object.keys(cardEls).forEach(function (id) {
+      if (!keep[id]) {
+        var card = cardEls[id];
+        delete cardEls[id];
+        animateRemoveCard(card);
+      }
+    });
+    players.forEach(function (p) {
+      var card = cardEls[p.id];
+      if (card) {
+        var list = getListEl(p);
+        if (card.parentElement !== list) list.appendChild(card);
+        refreshCard(p);
+      } else {
+        appendCard(p, true);
+      }
+    });
+    updateHints();
+
+    /* круги плавно переезжают на прежние места (в т.ч. после отмены) */
+    syncTokensToPlayers(animated);
+    syncBall(animated);
+    updateBallButton();
+  }
+
+  function undoHistory() {
+    if (historyIndex <= 0) return;
+    historyIndex--;
+    restoreSnapshot(history[historyIndex], true);
+  }
+
+  function redoHistory() {
+    if (historyIndex >= history.length - 1) return;
+    historyIndex++;
+    restoreSnapshot(history[historyIndex], true);
+  }
+
+  /* Горячие клавиши: Cmd+Z / Cmd+Shift+Z (или Ctrl вместо Cmd) */
+  document.addEventListener('keydown', function (e) {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if ((e.key || '').toLowerCase() !== 'z') return;
+    var t = e.target;
+    if (t && t.closest && t.closest('input, textarea, select')) return;
+    e.preventDefault();
+    if (e.shiftKey) redoHistory();
+    else undoHistory();
+  });
 
   /* ── Пресеты и схемы расстановки ──────────── */
 
@@ -1339,6 +1623,8 @@ btnMenu.addEventListener('click', function () {
         own: parseHex(colorsRaw.own) ? colorsRaw.own : DEFAULT_COLORS.own,
         opponent: parseHex(colorsRaw.opponent) ? colorsRaw.opponent : DEFAULT_COLORS.opponent
       },
+      /* в старых пресетах мяча нет — считаем, что мяча на поле нет */
+      ball: validPos(raw.ball) ? { x: Number(raw.ball.x), y: Number(raw.ball.y) } : null,
       players: raw.players.map(normalizePresetPlayer)
     };
   }
@@ -1348,6 +1634,7 @@ btnMenu.addEventListener('click', function () {
     return {
       orientation: state.orientation,
       colors: { own: teamColors.own, opponent: teamColors.opponent },
+      ball: ball.pos ? { x: round4(ball.pos.x), y: round4(ball.pos.y) } : null,
       players: players.map(function (p) {
         return {
           id: p.id,
@@ -1581,6 +1868,13 @@ btnMenu.addEventListener('click', function () {
     saveColors();
     refreshColorControls();
 
+    if (preset.ball) {
+      var bpos = clampPos(preset.ball.x, preset.ball.y, ballRadiusPx());
+      ball.pos = { x: round4(bpos.u), y: round4(bpos.v) };
+    } else {
+      ball.pos = null;
+    }
+
     if (state.orientation !== preset.orientation) {
       state.orientation = preset.orientation;
       storageSet('fb-board-orientation', state.orientation);
@@ -1588,6 +1882,8 @@ btnMenu.addEventListener('click', function () {
     }
 
     syncTokensToPlayers(animated);
+    syncBall(animated);
+    updateBallButton();
 
     currentPresetId = preset.id;
     persistPresets();
@@ -1601,6 +1897,7 @@ btnMenu.addEventListener('click', function () {
       return;
     }
     applyPresetState(p, true);
+    pushHistory();
     toast('Пресет загружен: ' + p.name);
   }
 
@@ -1722,6 +2019,7 @@ btnMenu.addEventListener('click', function () {
         savedAt: new Date().toISOString(),
         orientation: snapshot.orientation,
         colors: snapshot.colors,
+        ball: snapshot.ball,
         players: snapshot.players
       };
       presets.push(preset);
@@ -1772,6 +2070,7 @@ btnMenu.addEventListener('click', function () {
     savePlayers();
     if (modeLabel) modeLabel.textContent = 'Схема ' + key;
     syncTokensToPlayers(true);
+    pushHistory();
     toast('Схема ' + key + ': на поле ' + placed + ' из ' + starters.length);
   }
 
@@ -2020,4 +2319,7 @@ btnMenu.addEventListener('click', function () {
 
   initPresets();
   syncCounter();
+  updateBallButton();
+  pushHistory();
+  updateHistoryButtons();
 })();
