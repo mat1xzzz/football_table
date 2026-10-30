@@ -1035,8 +1035,29 @@ btnMenu.addEventListener('click', function () {
     }
   }
 
+  var BALL_KEY = 'fb-board-ball-v1';
+
+  /* Мяч тоже сохраняется, чтобы пережить перезагрузку страницы */
+  function saveBall() {
+    storageSet(BALL_KEY, ball.pos ? JSON.stringify({ x: ball.pos.x, y: ball.pos.y }) : '');
+  }
+
+  function loadBall() {
+    var raw = storageGet(BALL_KEY);
+    if (!raw) return;
+    try {
+      var parsed = JSON.parse(raw);
+      if (validPos(parsed)) {
+        ball.pos = { x: Number(parsed.x), y: Number(parsed.y) };
+      }
+    } catch (e) {
+      /* повреждённые данные — мяча на поле нет */
+    }
+  }
+
   function removeBall() {
     ball.pos = null;
+    saveBall();
     if (!ballEl) return;
     var el = ballEl;
     ballEl = null;
@@ -1050,6 +1071,7 @@ btnMenu.addEventListener('click', function () {
     } else {
       var pos = clampPos(0.5, 0.5, ballRadiusPx());
       ball.pos = { x: round4(pos.u), y: round4(pos.v) };
+      saveBall();
       showBall(0);
     }
     updateBallButton();
@@ -1082,6 +1104,7 @@ btnMenu.addEventListener('click', function () {
     var pt = localFieldPoint(clientX, clientY);
     var pos = clampPos(pt.u + d.ox, pt.v + d.oy, ballRadiusPx());
     ball.pos = { x: round4(pos.u), y: round4(pos.v) };
+    saveBall();
     placeToken(ballEl, { pos: ball.pos });
     pushHistory();
   }
@@ -1121,6 +1144,28 @@ btnMenu.addEventListener('click', function () {
 
   /* { id, type: 'free'|'arrow', points: [{x, y} в долях 0–1], color, width } */
   var drawings = [];
+
+  var DRAWINGS_KEY = 'fb-board-drawings-v1';
+
+  /* Рисунки сохраняются при каждом изменении, восстанавливаются после
+     перезагрузки: точки уже в долях 0–1, поэтому ориентация не важна */
+  function saveDrawings() {
+    storageSet(DRAWINGS_KEY, JSON.stringify(drawings));
+  }
+
+  function loadDrawings() {
+    var raw = storageGet(DRAWINGS_KEY);
+    if (!raw) return;
+    try {
+      var parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      /* normalizeDrawing отбрасывает повреждённые элементы и
+         подставляет значения по умолчанию там, где нужно */
+      drawings = parsed.map(normalizeDrawing).filter(function (d) { return !!d; });
+    } catch (e) {
+      /* повреждённые данные — начинаем без рисунков */
+    }
+  }
 
   var drawSvg = document.createElementNS(SVG_NS, 'svg');
   drawSvg.setAttribute('id', 'draw-layer');
@@ -1384,6 +1429,7 @@ btnMenu.addEventListener('click', function () {
     var el = buildDrawEl(d);
     drawSvg.appendChild(el);
     animateStrokeIn(el);
+    saveDrawings();
     pushHistory();
   }
 
@@ -1404,6 +1450,7 @@ btnMenu.addEventListener('click', function () {
         complete: function () { el.remove(); }
       });
     }
+    saveDrawings();
     pushHistory();
   }
 
@@ -1420,6 +1467,7 @@ btnMenu.addEventListener('click', function () {
           action: function () {
             drawings = [];
             renderDrawings();
+            saveDrawings();
             pushHistory();
             toast('Рисунки удалены');
           }
@@ -1918,6 +1966,9 @@ btnMenu.addEventListener('click', function () {
     ball.pos = snap.ball ? { x: snap.ball.x, y: snap.ball.y } : null;
     drawings = (snap.drawings || []).map(cloneDrawingData);
     renderDrawings();
+    /* Undo/Redo тоже оставляет след в автосохранении */
+    saveBall();
+    saveDrawings();
 
     /* карточки исчезнувших игроков убираем, новые добавляем, раскладываем по спискам */
     var keep = {};
@@ -2536,6 +2587,7 @@ btnMenu.addEventListener('click', function () {
     } else {
       ball.pos = null;
     }
+    saveBall();
 
     if (state.orientation !== preset.orientation) {
       state.orientation = preset.orientation;
@@ -2545,6 +2597,7 @@ btnMenu.addEventListener('click', function () {
 
     drawings = (preset.drawings || []).map(cloneDrawingData);
     renderDrawings();
+    saveDrawings();
 
     syncTokensToPlayers(animated);
     syncBall(animated);
@@ -2738,6 +2791,7 @@ btnMenu.addEventListener('click', function () {
     savePlayers();
     if (modeLabel) modeLabel.textContent = 'Схема ' + key;
     syncTokensToPlayers(true);
+    saveDrawings();
     pushHistory();
     toast('Схема ' + key + ': на поле ' + placed + ' из ' + starters.length);
   }
@@ -2984,6 +3038,14 @@ btnMenu.addEventListener('click', function () {
     state.orientation = savedOrientation;
   }
   applyOrientation(false);
+
+  /* Восстановление мяча и рисунков: после того, как поле получило
+     размеры и ориентацию. Точки в долях 0–1, поэтому позиции верны
+     в том числе при вертикальной ориентации. */
+  loadBall();
+  loadDrawings();
+  renderDrawings();
+  syncBall(false);
 
   initPresets();
   syncCounter();
