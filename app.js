@@ -2033,15 +2033,62 @@ btnMenu.addEventListener('click', function () {
   var PRESETS_KEY = 'fb-board-presets-v1';
   var CURRENT_PRESET_KEY = 'fb-board-current-preset';
 
-  /* Линии схем: вратарь, защита, полузащита, атака и т.д.
+  /* Схемы расстановки: единый массив объектов «название + ряды»,
+     чтобы новые схемы добавлялись здесь, в одном месте.
+     Ряды перечислены от защиты к атаке, первым идёт вратарь
+     (например, «ёлочка» 4-3-2-1 — четыре ряда: 1-4 / 1-3 / 1-2 / 1-1).
      Своя половина — левая половина поля (координаты 0–1). */
-  var FORMATIONS = {
-    '4-4-2': [1, 4, 4, 2],
-    '4-3-3': [1, 4, 3, 3],
-    '3-5-2': [1, 3, 5, 2],
-    '4-2-3-1': [1, 4, 2, 3, 1],
-    '5-3-2': [1, 5, 3, 2]
-  };
+  var FORMATIONS = [
+    /* популярные схемы — в окне «Схемы» показываются первыми */
+    { name: '4-4-2',   lines: [1, 4, 4, 2] },
+    { name: '4-3-3',   lines: [1, 4, 3, 3] },
+    { name: '3-5-2',   lines: [1, 3, 5, 2] },
+    { name: '4-2-3-1', lines: [1, 4, 2, 3, 1] },
+    { name: '5-3-2',   lines: [1, 5, 3, 2] },
+    { name: '4-1-4-1', lines: [1, 4, 1, 4, 1] },
+    { name: '3-4-3',   lines: [1, 3, 4, 3] },
+    { name: '4-5-1',   lines: [1, 4, 5, 1] },
+    /* остальные схемы */
+    { name: '4-1-2-1-2 (ромб)',            lines: [1, 4, 1, 2, 1, 2] },
+    { name: '4-3-2-1 (ёлочка)',            lines: [1, 4, 3, 2, 1] },
+    { name: '4-2-2-2',                     lines: [1, 4, 2, 2, 2] },
+    { name: '4-1-3-2',                     lines: [1, 4, 1, 3, 2] },
+    { name: '4-3-1-2',                     lines: [1, 4, 3, 1, 2] },
+    { name: '4-2-4',                       lines: [1, 4, 2, 4] },
+    { name: '4-4-1-1',                     lines: [1, 4, 4, 1, 1] },
+    { name: '4-1-2-3',                     lines: [1, 4, 1, 2, 3] },
+    { name: '3-4-1-2',                     lines: [1, 3, 4, 1, 2] },
+    { name: '3-4-2-1',                     lines: [1, 3, 4, 2, 1] },
+    { name: '3-5-1-1',                     lines: [1, 3, 5, 1, 1] },
+    { name: '3-6-1',                       lines: [1, 3, 6, 1] },
+    { name: '3-3-4',                       lines: [1, 3, 3, 4] },
+    { name: '3-1-4-2',                     lines: [1, 3, 1, 4, 2] },
+    { name: '5-4-1',                       lines: [1, 5, 4, 1] },
+    { name: '5-2-3',                       lines: [1, 5, 2, 3] },
+    { name: '5-3-1-1',                     lines: [1, 5, 3, 1, 1] },
+    { name: '5-2-1-2',                     lines: [1, 5, 2, 1, 2] },
+    { name: '4-2-1-3 (4-3-3 с опорником)', lines: [1, 4, 2, 1, 3] },
+    { name: '4-6-0 (ложная девятка)',      lines: [1, 4, 6] },
+    { name: '3-2-4-1',                     lines: [1, 3, 2, 4, 1] },
+    { name: '2-3-5 (пирамида)',            lines: [1, 2, 3, 5] }
+  ];
+
+  /* Порядок карточек в окне «Схемы»: популярные показываются первыми,
+     остальные — в порядке объявления в FORMATIONS. */
+  var POPULAR_FORMATION_NAMES = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2', '4-1-4-1', '3-4-3', '4-5-1'];
+
+  function orderedFormations() {
+    var popular = [];
+    POPULAR_FORMATION_NAMES.forEach(function (name) {
+      for (var i = 0; i < FORMATIONS.length; i++) {
+        if (FORMATIONS[i].name === name) { popular.push(FORMATIONS[i]); return; }
+      }
+    });
+    var rest = FORMATIONS.filter(function (f) {
+      return POPULAR_FORMATION_NAMES.indexOf(f.name) < 0;
+    });
+    return popular.concat(rest);
+  }
 
   var presets = [];        /* { id, name, savedAt, orientation, colors, players } */
   var currentPresetId = null; /* последний загруженный пресет */
@@ -2782,14 +2829,15 @@ btnMenu.addEventListener('click', function () {
     return slots;
   }
 
-  function doApplyFormation(key) {
-    var counts = FORMATIONS[key];
-    if (!counts) return;
-    var slots = formationSlots(counts);
+  function doApplyFormation(f) {
+    if (!f || !Array.isArray(f.lines) || !f.lines.length) return;
+    var slots = formationSlots(f.lines);
     var starters = players.filter(function (p) {
       return p.team === 'own' && p.status === 'start';
     });
-    /* меняем только игроков основного состава; лишние остаются в списке */
+    /* меняем только игроков основного состава; лишние остаются в списке.
+       Слоты идут от вратаря к атаке — если игроков меньше 11,
+       заполняются позиции от вратаря вперёд. */
     starters.forEach(function (p) { p.pos = null; });
     var placed = Math.min(starters.length, slots.length);
     for (var i = 0; i < placed; i++) {
@@ -2797,11 +2845,11 @@ btnMenu.addEventListener('click', function () {
       starters[i].pos = { x: round4(pos.u), y: round4(pos.v) };
     }
     savePlayers();
-    if (modeLabel) modeLabel.textContent = 'Схема ' + key;
+    if (modeLabel) modeLabel.textContent = 'Схема ' + f.name;
     syncTokensToPlayers(true);
     saveDrawings();
     pushHistory();
-    toast('Схема ' + key + ': на поле ' + placed + ' из ' + starters.length);
+    toast('Схема ' + f.name + ': на поле ' + placed + ' из ' + starters.length);
   }
 
   /* Вертикальное превью схемы: вратарь внизу по центру, линии снизу
@@ -2823,30 +2871,118 @@ btnMenu.addEventListener('click', function () {
     return box;
   }
 
+  /* ── Окно «Схемы»: поиск, фильтр по защитникам, сетка ── */
+
+  /* Фильтры по числу защитников (первый ряд после вратаря) */
+  var FORMATION_FILTERS = [
+    { id: 'all',   label: 'Все' },
+    { id: '3',     label: '3 в защите' },
+    { id: '4',     label: '4 в защите' },
+    { id: '5',     label: '5 в защите' },
+    { id: 'other', label: 'Другие' }
+  ];
+
+  function defendersOf(f) {
+    return f.lines.length > 1 ? f.lines[1] : 0;
+  }
+
+  function matchesFormationFilter(f, filterId) {
+    if (filterId === 'all') return true;
+    var d = defendersOf(f);
+    if (filterId === 'other') return d !== 3 && d !== 4 && d !== 5;
+    return d === Number(filterId);
+  }
+
+  function buildFormationCard(f, onPick) {
+    var cardBtn = document.createElement('button');
+    cardBtn.type = 'button';
+    cardBtn.className = 'formation-card';
+    cardBtn.appendChild(buildFormationPreview(f.lines));
+    var label = document.createElement('span');
+    label.className = 'formation-card-label';
+    label.textContent = f.name;
+    cardBtn.appendChild(label);
+    cardBtn.addEventListener('click', onPick);
+    return cardBtn;
+  }
+
   function openFormationsModal() {
+    var ctx = null;
+    var ordered = orderedFormations();
+    var activeFilter = 'all';
+
     var content = document.createElement('div');
-    content.className = 'formation-grid';
-    var ctx = openModal({
+    content.className = 'formation-panel';
+
+    var search = document.createElement('input');
+    search.type = 'text';
+    search.className = 'player-input formation-search';
+    search.placeholder = 'Поиск по названию схемы';
+    search.setAttribute('aria-label', 'Поиск по названию схемы');
+
+    var filters = document.createElement('div');
+    filters.className = 'formation-filters';
+    FORMATION_FILTERS.forEach(function (flt) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tool-btn formation-filter-btn' + (flt.id === activeFilter ? ' active' : '');
+      btn.textContent = flt.label;
+      btn.dataset.filter = flt.id;
+      btn.addEventListener('click', function () {
+        activeFilter = flt.id;
+        filters.querySelectorAll('.formation-filter-btn').forEach(function (b) {
+          b.classList.toggle('active', b === btn);
+        });
+        renderGrid();
+      });
+      filters.appendChild(btn);
+    });
+
+    /* прокрутка внутри окна: 30 карточек не растягивают окно в простыню */
+    var scroll = document.createElement('div');
+    scroll.className = 'formation-scroll';
+
+    var grid = document.createElement('div');
+    grid.className = 'formation-grid';
+    scroll.appendChild(grid);
+
+    var empty = document.createElement('p');
+    empty.className = 'formation-empty';
+    empty.hidden = true;
+    empty.textContent = 'Схема не найдена';
+    scroll.appendChild(empty);
+
+    content.appendChild(search);
+    content.appendChild(filters);
+    content.appendChild(scroll);
+
+    function renderGrid() {
+      grid.innerHTML = '';
+      var query = search.value.trim().toLowerCase();
+      var shown = 0;
+      ordered.forEach(function (f) {
+        if (query && f.name.toLowerCase().indexOf(query) < 0) return;
+        if (!matchesFormationFilter(f, activeFilter)) return;
+        shown++;
+        grid.appendChild(buildFormationCard(f, function () {
+          ctx.close();
+          doApplyFormation(f);
+        }));
+      });
+      empty.hidden = shown > 0;
+    }
+
+    search.addEventListener('input', renderGrid);
+
+    ctx = openModal({
       title: 'Схемы расстановки',
-      text: 'Схема расставит основной состав на своей половине поля.',
+      text: 'Схема расставит основной состав на своей половине поля. Если игроков меньше 11, заполняются позиции от вратаря к атаке.',
       content: content,
       buttons: [{ label: 'Отмена', className: 'ghost' }]
     });
-    Object.keys(FORMATIONS).forEach(function (key) {
-      var cardBtn = document.createElement('button');
-      cardBtn.type = 'button';
-      cardBtn.className = 'formation-card';
-      cardBtn.appendChild(buildFormationPreview(FORMATIONS[key]));
-      var label = document.createElement('span');
-      label.className = 'formation-card-label';
-      label.textContent = key;
-      cardBtn.appendChild(label);
-      cardBtn.addEventListener('click', function () {
-        ctx.close();
-        doApplyFormation(key);
-      });
-      content.appendChild(cardBtn);
-    });
+
+    renderGrid();
+    search.focus();
   }
 
   btnFormations.addEventListener('click', function () {

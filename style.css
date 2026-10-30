@@ -934,7 +934,52 @@ select.player-input {
   width: 100%;
 }
 
-/* ── Схемы: сетка карточек с вертикальным превью ── */
+/* ── Схемы: поиск, фильтры и сетка карточек ── */
+
+.formation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formation-search {
+  width: 100%;
+}
+
+.formation-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.formation-filter-btn {
+  font-size: 11px;
+  padding: 5px 9px;
+}
+
+/* Прокрутка внутри окна: много карточек не растягивают окно в простыню */
+.formation-scroll {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.formation-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.formation-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.formation-empty {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 12px 0;
+}
 
 .formation-grid {
   display: grid;
