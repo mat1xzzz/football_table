@@ -47,6 +47,29 @@
       </section>
 
       <section class="panel fade-item">
+        <h2 class="panel-title">Рисование</h2>
+        <div class="draw-tools">
+          <button id="btn-draw-mode" class="tool-btn" type="button">Включить рисование</button>
+          <div class="draw-instruments">
+            <button class="tool-btn draw-instrument active" data-draw-tool="free" type="button">Линия</button>
+            <button class="tool-btn draw-instrument" data-draw-tool="arrow" type="button">Стрелка</button>
+            <button class="tool-btn draw-instrument" data-draw-tool="eraser" type="button">Ластик</button>
+          </div>
+          <label class="draw-color-row">
+            <span>Цвет линии</span>
+            <input type="color" id="draw-color" value="#ffffff" title="Цвет линии">
+          </label>
+          <div class="draw-widths">
+            <button class="tool-btn draw-width active" data-draw-width="4" type="button">Тонкая</button>
+            <button class="tool-btn draw-width" data-draw-width="8" type="button">Средняя</button>
+            <button class="tool-btn draw-width" data-draw-width="14" type="button">Толстая</button>
+          </div>
+          <button id="btn-clear-drawings" class="tool-btn" type="button">Очистить рисунки</button>
+          <button id="btn-download-png" class="tool-btn draw-png-btn" type="button">Скачать PNG</button>
+        </div>
+      </section>
+
+      <section class="panel fade-item">
         <h2 class="panel-title">Составы</h2>
         <form id="player-form" class="player-form" autocomplete="off">
           <input id="player-number" class="player-input player-number" type="number" inputmode="numeric" min="0" max="99" step="1" placeholder="Номер (обяз.)">
@@ -113,7 +136,7 @@
       </section>
 
       <footer class="sidebar-footer fade-item">
-        Этап 6А · Мяч и история действий
+        Этап 6Б · Рисование и экспорт PNG
       </footer>
     </aside>
 

@@ -846,6 +846,7 @@ btnMenu.addEventListener('click', function () {
   /* Начало перетаскивания из списка (только с карточки, не с кнопок) */
   function onCardPointerDown(e) {
     var card = e.currentTarget;
+    if (drawState.on) return; /* в режиме рисования составы не перетаскиваются */
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (e.target.closest('button, input, select')) return;
     if (card.classList.contains('editing') || card.classList.contains('removing')) return;
@@ -884,6 +885,7 @@ btnMenu.addEventListener('click', function () {
 
   /* Начало перетаскивания круга по полю */
   function onTokenPointerDown(e) {
+    if (drawState.on) return; /* в режиме рисования круги не двигаются */
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     var token = e.currentTarget;
     var p = getPlayer(token.dataset.id);
@@ -1059,6 +1061,7 @@ btnMenu.addEventListener('click', function () {
   }
 
   function onBallPointerDown(e) {
+    if (drawState.on) return; /* в режиме рисования мяч не двигается */
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (!ball.pos || !ballEl) return;
     e.preventDefault();
@@ -1109,6 +1112,625 @@ btnMenu.addEventListener('click', function () {
       removeBall();
     }
   }
+
+  /* ── Рисование на поле ───────────────────── */
+
+  var DRAW_VIEW_W = 1200;
+  var DRAW_VIEW_H = 780;
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+
+  /* { id, type: 'free'|'arrow', points: [{x, y} в долях 0–1], color, width } */
+  var drawings = [];
+
+  var drawSvg = document.createElementNS(SVG_NS, 'svg');
+  drawSvg.setAttribute('id', 'draw-layer');
+  drawSvg.setAttribute('viewBox', '0 0 ' + DRAW_VIEW_W + ' ' + DRAW_VIEW_H);
+  drawSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  rotator.appendChild(drawSvg);
+
+  function makeDrawId() {
+    return 'd' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+  }
+
+  var btnDrawMode = document.getElementById('btn-draw-mode');
+  var btnClearDrawings = document.getElementById('btn-clear-drawings');
+  var btnDownloadPng = document.getElementById('btn-download-png');
+  var drawColorInput = document.getElementById('draw-color');
+  var drawInstrumentBtns = Array.prototype.slice.call(document.querySelectorAll('.draw-instrument'));
+  var drawWidthBtns = Array.prototype.slice.call(document.querySelectorAll('.draw-width'));
+
+  var drawState = { on: false, tool: 'free', color: '#ffffff', width: 4, prevModeText: null };
+  var activeDraw = null;
+
+  function cloneDrawingData(d) {
+    return JSON.parse(JSON.stringify(d));
+  }
+
+  function setDrawMode(on) {
+    drawState.on = !!on;
+    fieldWrap.classList.toggle('draw-mode', drawState.on);
+    if (btnDrawMode) {
+      btnDrawMode.classList.toggle('active', drawState.on);
+      btnDrawMode.textContent = drawState.on ? 'Выключить рисование' : 'Включить рисование';
+    }
+    if (drawState.on) {
+      drawState.prevModeText = modeLabel ? modeLabel.textContent : null;
+      if (modeLabel) modeLabel.textContent = 'Рисование';
+    } else if (modeLabel && drawState.prevModeText != null) {
+      modeLabel.textContent = drawState.prevModeText;
+    }
+    cancelActiveDraw();
+  }
+
+  function setDrawTool(tool) {
+    if (tool !== 'free' && tool !== 'arrow' && tool !== 'eraser') tool = 'free';
+    drawState.tool = tool;
+    drawInstrumentBtns.forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.drawTool === tool);
+    });
+  }
+
+  drawInstrumentBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      anime({ targets: btn, scale: [1, 0.92, 1], duration: 320, easing: 'easeOutQuad' });
+      setDrawTool(btn.dataset.drawTool);
+    });
+  });
+
+  drawWidthBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      anime({ targets: btn, scale: [1, 0.92, 1], duration: 320, easing: 'easeOutQuad' });
+      drawState.width = Number(btn.dataset.drawWidth) || 4;
+      drawWidthBtns.forEach(function (b) { b.classList.toggle('active', b === btn); });
+    });
+  });
+
+  drawColorInput.addEventListener('input', function () {
+    drawState.color = drawColorInput.value;
+  });
+
+  btnDrawMode.addEventListener('click', function () {
+    anime({ targets: btnDrawMode, scale: [1, 0.93, 1], duration: 320, easing: 'easeOutQuad' });
+    setDrawMode(!drawState.on);
+  });
+
+  /* ── Геометрия рисунков (координаты 0–1) ── */
+
+  function clampDrawPoint(pt) {
+    return {
+      x: Math.min(1, Math.max(0, pt.u)),
+      y: Math.min(1, Math.max(0, pt.v))
+    };
+  }
+
+  function drawingPointsPx(d) {
+    return d.points.map(function (p) {
+      return { x: p.x * DRAW_VIEW_W, y: p.y * DRAW_VIEW_H };
+    });
+  }
+
+  /* Сглаживание свободной линии: квадратичные кривые через середины отрезков */
+  function smoothPathData(pts) {
+    if (pts.length < 2) return '';
+    function f(n) { return n.toFixed(1); }
+    if (pts.length === 2) {
+      return 'M ' + f(pts[0].x) + ' ' + f(pts[0].y) + ' L ' + f(pts[1].x) + ' ' + f(pts[1].y);
+    }
+    var data = 'M ' + f(pts[0].x) + ' ' + f(pts[0].y);
+    var m1 = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    data += ' L ' + f(m1.x) + ' ' + f(m1.y);
+    for (var i = 1; i < pts.length - 1; i++) {
+      var mid = { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 };
+      data += ' Q ' + f(pts[i].x) + ' ' + f(pts[i].y) + ' ' + f(mid.x) + ' ' + f(mid.y);
+    }
+    var last = pts[pts.length - 1];
+    data += ' L ' + f(last.x) + ' ' + f(last.y);
+    return data;
+  }
+
+  /* Треугольник наконечника стрелки: острие на конце линии */
+  function arrowHeadPoints(p0, p1, width) {
+    var back = Math.max(14, width * 3);
+    var wing = Math.max(9, width * 1.9);
+    var ang = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+    var cs = Math.cos(ang);
+    var sn = Math.sin(ang);
+    var bx = p1.x - back * cs;
+    var by = p1.y - back * sn;
+    return [
+      { x: p1.x, y: p1.y },
+      { x: bx + wing * (-sn), y: by + wing * cs },
+      { x: bx - wing * (-sn), y: by - wing * cs }
+    ];
+  }
+
+  function pointsToAttr(arr) {
+    return arr.map(function (p) { return p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+  }
+
+  function setDrawStrokeAttrs(el, d, isHit) {
+    el.setAttribute('fill', 'none');
+    el.setAttribute('stroke', isHit ? '#000000' : d.color);
+    if (isHit) el.setAttribute('stroke-opacity', '0');
+    el.setAttribute('stroke-width', String(isHit ? Math.max(d.width + 14, 16) : d.width));
+    el.setAttribute('stroke-linecap', 'round');
+    el.setAttribute('stroke-linejoin', 'round');
+  }
+
+  function buildDrawEl(d) {
+    var g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'draw-item');
+    g.setAttribute('data-id', d.id);
+    var pts = drawingPointsPx(d);
+    var stroke;
+    var hit;
+    if (d.type === 'arrow' && pts.length >= 2) {
+      stroke = document.createElementNS(SVG_NS, 'line');
+      hit = document.createElementNS(SVG_NS, 'line');
+      var from = pts[0];
+      var to = pts[pts.length - 1];
+      [stroke, hit].forEach(function (el) {
+        el.setAttribute('x1', from.x.toFixed(1));
+        el.setAttribute('y1', from.y.toFixed(1));
+        el.setAttribute('x2', to.x.toFixed(1));
+        el.setAttribute('y2', to.y.toFixed(1));
+      });
+      stroke.setAttribute('class', 'draw-stroke');
+      hit.setAttribute('class', 'draw-hit');
+      var head = document.createElementNS(SVG_NS, 'polygon');
+      head.setAttribute('points', pointsToAttr(arrowHeadPoints(from, to, d.width)));
+      head.setAttribute('class', 'draw-head');
+      head.setAttribute('fill', d.color);
+      g.appendChild(stroke);
+      g.appendChild(head);
+      g.appendChild(hit);
+    } else {
+      var data = smoothPathData(pts);
+      stroke = document.createElementNS(SVG_NS, 'path');
+      stroke.setAttribute('d', data);
+      stroke.setAttribute('class', 'draw-stroke');
+      hit = document.createElementNS(SVG_NS, 'path');
+      hit.setAttribute('d', data);
+      hit.setAttribute('class', 'draw-hit');
+      g.appendChild(stroke);
+      g.appendChild(hit);
+    }
+    setDrawStrokeAttrs(stroke, d, false);
+    setDrawStrokeAttrs(hit, d, true);
+    return g;
+  }
+
+  function updateDrawElGeometry(el, d) {
+    if (!el) return;
+    var pts = drawingPointsPx(d);
+    if (d.type === 'arrow') {
+      if (pts.length < 2) return;
+      var to = pts[1];
+      var line = el.querySelector('.draw-stroke');
+      if (line) {
+        line.setAttribute('x2', to.x.toFixed(1));
+        line.setAttribute('y2', to.y.toFixed(1));
+      }
+      var hit = el.querySelector('.draw-hit');
+      if (hit) {
+        hit.setAttribute('x2', to.x.toFixed(1));
+        hit.setAttribute('y2', to.y.toFixed(1));
+      }
+      var head = el.querySelector('.draw-head');
+      if (head) head.setAttribute('points', pointsToAttr(arrowHeadPoints(pts[0], to, d.width)));
+    } else {
+      var data = smoothPathData(pts);
+      var path = el.querySelector('.draw-stroke');
+      if (path) path.setAttribute('d', data);
+      var hitPath = el.querySelector('.draw-hit');
+      if (hitPath) hitPath.setAttribute('d', data);
+    }
+  }
+
+  /* Анимация появления линии: обводка прорисовывается через stroke-dashoffset */
+  function animateStrokeIn(el) {
+    var stroke = el.querySelector('.draw-stroke');
+    if (!stroke || typeof anime === 'undefined' || !anime.setDashoffset) return;
+    anime({
+      targets: stroke,
+      strokeDashoffset: [anime.setDashoffset, 0],
+      duration: 550,
+      easing: 'easeOutCubic',
+      complete: function () {
+        stroke.style.strokeDasharray = '';
+        stroke.style.strokeDashoffset = '';
+      }
+    });
+    var head = el.querySelector('.draw-head');
+    if (head) {
+      head.style.opacity = '0';
+      anime({
+        targets: head,
+        opacity: 1,
+        delay: 260,
+        duration: 200,
+        easing: 'easeOutQuad'
+      });
+    }
+  }
+
+  function renderDrawings() {
+    var items = drawSvg.querySelectorAll('g.draw-item');
+    for (var i = 0; i < items.length; i++) items[i].remove();
+    drawings.forEach(function (d) {
+      drawSvg.appendChild(buildDrawEl(d));
+    });
+  }
+
+  function cancelActiveDraw() {
+    activeDraw = null;
+    var preview = drawSvg.querySelector('.draw-item.draw-preview');
+    if (preview) preview.remove();
+  }
+
+  function commitActiveDraw() {
+    var ad = activeDraw;
+    activeDraw = null;
+    if (ad.el) ad.el.remove();
+    if (ad.points.length < 2) return;
+    var pts = ad.points.map(function (p) { return { x: round4(p.x), y: round4(p.y) }; });
+    var len = 0;
+    for (var i = 1; i < pts.length; i++) {
+      len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    }
+    if (len < 0.02) return; /* случайный клик — не рисуем */
+    var d = { id: ad.id, type: ad.type, points: pts, color: ad.color, width: ad.width };
+    drawings.push(d);
+    var el = buildDrawEl(d);
+    drawSvg.appendChild(el);
+    animateStrokeIn(el);
+    pushHistory();
+  }
+
+  function eraseDrawingById(id) {
+    var idx = -1;
+    for (var i = 0; i < drawings.length; i++) {
+      if (drawings[i].id === id) { idx = i; break; }
+    }
+    if (idx < 0) return;
+    drawings.splice(idx, 1);
+    var el = drawSvg.querySelector('g.draw-item[data-id="' + id + '"]');
+    if (el) {
+      anime({
+        targets: el,
+        opacity: 0,
+        duration: 160,
+        easing: 'easeInQuad',
+        complete: function () { el.remove(); }
+      });
+    }
+    pushHistory();
+  }
+
+  btnClearDrawings.addEventListener('click', function () {
+    anime({ targets: btnClearDrawings, scale: [1, 0.93, 1], duration: 320, easing: 'easeOutQuad' });
+    openModal({
+      title: 'Очистить рисунки?',
+      text: 'Все нарисованные линии и стрелки будут удалены безвозвратно.',
+      buttons: [
+        { label: 'Отмена', className: 'ghost' },
+        {
+          label: 'Очистить',
+          className: 'danger',
+          action: function () {
+            drawings = [];
+            renderDrawings();
+            pushHistory();
+            toast('Рисунки удалены');
+          }
+        }
+      ]
+    });
+  });
+
+  /* Рисование через Pointer Events (мышь и палец) */
+  drawSvg.addEventListener('pointerdown', function (e) {
+    if (!drawState.on) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    var pt = localFieldPoint(e.clientX, e.clientY);
+    if (!isInsideField(pt)) return;
+    if (drawState.tool === 'eraser') {
+      var item = e.target && e.target.closest ? e.target.closest('g.draw-item') : null;
+      if (item && !item.classList.contains('draw-preview')) {
+        eraseDrawingById(item.getAttribute('data-id'));
+      }
+      return;
+    }
+    e.preventDefault();
+    try { drawSvg.setPointerCapture(e.pointerId); } catch (err) { /* необязательно */ }
+    var type = drawState.tool === 'arrow' ? 'arrow' : 'free';
+    var startPt = clampDrawPoint(pt);
+    var points = type === 'arrow'
+      ? [startPt, { x: startPt.x, y: startPt.y }]
+      : [startPt];
+    activeDraw = {
+      id: makeDrawId(),
+      pointerId: e.pointerId,
+      type: type,
+      color: drawState.color,
+      width: drawState.width,
+      points: points,
+      el: null
+    };
+    var preview = buildDrawEl(adPreview(ad));
+    preview.setAttribute('class', 'draw-item draw-preview');
+    activeDraw.el = preview;
+    drawSvg.appendChild(preview);
+  });
+
+  function adPreview(ad) {
+    return { id: ad.id, type: ad.type, points: ad.points, color: ad.color, width: ad.width };
+  }
+
+  drawSvg.addEventListener('pointermove', function (e) {
+    if (!activeDraw || e.pointerId !== activeDraw.pointerId) return;
+    var pt = clampDrawPoint(localFieldPoint(e.clientX, e.clientY));
+    if (activeDraw.type === 'arrow') {
+      activeDraw.points[1] = pt;
+    } else {
+      var last = activeDraw.points[activeDraw.points.length - 1];
+      var dx = pt.x - last.x;
+      var dy = pt.y - last.y;
+      if (dx * dx + dy * dy < 0.000009) return; /* отсекаем дрожание */
+      activeDraw.points.push(pt);
+    }
+    updateDrawElGeometry(activeDraw.el, activeDraw);
+  });
+
+  drawSvg.addEventListener('pointerup', function (e) {
+    if (activeDraw && e.pointerId === activeDraw.pointerId) commitActiveDraw();
+  });
+
+  drawSvg.addEventListener('pointercancel', function (e) {
+    if (activeDraw && e.pointerId === activeDraw.pointerId) cancelActiveDraw();
+  });
+
+  /* ── Экспорт PNG (сборка изображения вручную на canvas) ── */
+
+  function loadFieldImage(onDone) {
+    var img = new Image();
+    var url = null;
+    try {
+      var str = new XMLSerializer().serializeToString(fieldSvg);
+      var blob = new Blob([str], { type: 'image/svg+xml;charset=utf-8' });
+      url = URL.createObjectURL(blob);
+    } catch (e) {
+      onDone(null);
+      return;
+    }
+    img.onload = function () {
+      URL.revokeObjectURL(url);
+      onDone(img);
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      onDone(null);
+    };
+    img.src = url;
+  }
+
+  /* Упрощённое поле, если SVG не удалось отрисовать как изображение */
+  function paintFallbackField(ctx) {
+    var grad = ctx.createLinearGradient(0, 0, DRAW_VIEW_W, 0);
+    grad.addColorStop(0, '#3fa63f');
+    grad.addColorStop(0.5, '#48b448');
+    grad.addColorStop(1, '#3fa63f');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, DRAW_VIEW_W, DRAW_VIEW_H);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    for (var i = 0; i < 6; i++) ctx.fillRect(i * 200, 0, 100, DRAW_VIEW_H);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(40, 40, 1120, 700);
+    ctx.beginPath(); ctx.moveTo(600, 40); ctx.lineTo(600, 740); ctx.stroke();
+    ctx.beginPath(); ctx.arc(600, 390, 91.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeRect(40, 203, 176, 374);
+    ctx.strokeRect(984, 203, 176, 374);
+    ctx.strokeRect(40, 311, 66, 158);
+    ctx.strokeRect(1094, 311, 66, 158);
+  }
+
+  /* Экранная точка из координат поля в px: учитывает поворот на 90° */
+  function fieldPointToScreen(px, py) {
+    if (state.orientation === 'vertical') return { x: DRAW_VIEW_H - py, y: px };
+    return { x: px, y: py };
+  }
+
+  function clipLabelFor(ctx, text, maxWidth) {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    var t = text;
+    while (t.length > 1 && ctx.measureText(t + '…').width > maxWidth) {
+      t = t.slice(0, -1);
+    }
+    return t + '…';
+  }
+
+  function pngDateStamp() {
+    var d = new Date();
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  function downloadPng() {
+    var s = 2; /* масштаб для чёткости */
+    var vertical = state.orientation === 'vertical';
+    var canvas = document.createElement('canvas');
+    canvas.width = (vertical ? DRAW_VIEW_H : DRAW_VIEW_W) * s;
+    canvas.height = (vertical ? DRAW_VIEW_W : DRAW_VIEW_H) * s;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) {
+      toast('Не удалось создать изображение', true);
+      return;
+    }
+
+    /* Отрисовка в локальных координатах поля: при вертикальной
+       ориентации поле повёрнуто на 90 градусов, как на экране */
+    function setRot() {
+      if (vertical) ctx.setTransform(0, s, -s, 0, DRAW_VIEW_H * s, 0);
+      else ctx.setTransform(s, 0, 0, s, 0, 0);
+    }
+
+    /* Отрисовка без поворота (текст, круги) — в экранной ориентации */
+    function setScreen() {
+      ctx.setTransform(s, 0, 0, s, 0, 0);
+    }
+
+    loadFieldImage(function (img) {
+      /* 1. Поле */
+      setRot();
+      if (img) {
+        try { ctx.drawImage(img, 0, 0, DRAW_VIEW_W, DRAW_VIEW_H); }
+        catch (e) { paintFallbackField(ctx); }
+      } else {
+        paintFallbackField(ctx);
+      }
+
+      /* 2. Рисунки (линии и стрелки поворачиваются вместе с полем) */
+      setRot();
+      drawings.forEach(function (d) {
+        var pts = drawingPointsPx(d);
+        ctx.strokeStyle = d.color;
+        ctx.fillStyle = d.color;
+        ctx.lineWidth = d.width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (d.type === 'arrow' && pts.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          ctx.lineTo(pts[1].x, pts[1].y);
+          ctx.stroke();
+          var head = arrowHeadPoints(pts[0], pts[1], d.width);
+          ctx.beginPath();
+          head.forEach(function (p, i) {
+            if (i === 0) ctx.moveTo(p.x, p.y);
+            else ctx.lineTo(p.x, p.y);
+          });
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          try { ctx.stroke(new Path2D(smoothPathData(pts))); } catch (e) { /* пустой путь */ }
+        }
+      });
+
+      /* 3. Круги игроков с номерами и подписями */
+      players.forEach(function (p) {
+        if (!p.pos) return;
+        var pos = clampPos(p.pos.x, p.pos.y);
+        var scr = fieldPointToScreen(pos.u * DRAW_VIEW_W, pos.v * DRAW_VIEW_H);
+        var disc = PLAYER_RADIUS * 2;
+        var r = PLAYER_RADIUS;
+        var hex = p.team === 'opponent' ? teamColors.opponent : teamColors.own;
+        setScreen();
+        ctx.beginPath();
+        ctx.arc(scr.x, scr.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = hex;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 3;
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.lineWidth = disc * 0.0588;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.beginPath();
+        ctx.arc(scr.x, scr.y, r - ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.stroke();
+        var fs = disc * 0.3824;
+        ctx.font = '700 ' + fs.toFixed(1) + 'px "Segoe UI", Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = numberColorFor(hex);
+        if (p.number) ctx.fillText(p.number, scr.x, scr.y + fs * 0.05);
+        if (p.name) {
+          var lfs = disc * 0.3235;
+          ctx.font = '600 ' + lfs.toFixed(1) + 'px "Segoe UI", Arial, sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+          ctx.shadowBlur = 3;
+          ctx.fillText(clipLabelFor(ctx, p.name, disc * 3.235),
+            scr.x, scr.y + r + disc * 0.0588 + lfs * 0.75);
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+        }
+      });
+
+      /* 4. Мяч */
+      if (ball.pos) {
+        var bpos = clampPos(ball.pos.x, ball.pos.y, ballRadiusPx());
+        var bscr = fieldPointToScreen(bpos.u * DRAW_VIEW_W, bpos.v * DRAW_VIEW_H);
+        var bd = BALL_DIAMETER;
+        setScreen();
+        var grad = ctx.createRadialGradient(
+          bscr.x - bd * 0.17, bscr.y - bd * 0.2, bd * 0.08,
+          bscr.x, bscr.y, bd * 0.55
+        );
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(1, '#d6d9de');
+        ctx.beginPath();
+        ctx.arc(bscr.x, bscr.y, bd / 2, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 3;
+        ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.lineWidth = bd * 0.075;
+        ctx.strokeStyle = 'rgba(17, 24, 39, 0.65)';
+        ctx.beginPath();
+        ctx.arc(bscr.x, bscr.y, bd / 2 - ctx.lineWidth / 2, 0, Math.PI * 2);
+        ctx.stroke();
+        var box = bd * 0.44;
+        var rel = [[0, -0.5], [0.5, -0.14], [0.31, 0.5], [-0.31, 0.5], [-0.5, -0.14]];
+        ctx.beginPath();
+        rel.forEach(function (rp, i) {
+          var x = bscr.x + rp[0] * box;
+          var y = bscr.y + rp[1] * box;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.globalAlpha = 0.92;
+        ctx.fillStyle = '#111827';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      /* 5. Скачивание */
+      try {
+        canvas.toBlob(function (blob) {
+          if (!blob) {
+            toast('Не удалось сохранить PNG', true);
+            return;
+          }
+          var name = 'тактика-' + pngDateStamp() + '.png';
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          toast('PNG сохранён: ' + name);
+        }, 'image/png');
+      } catch (err) {
+        toast('Не удалось сохранить PNG', true);
+      }
+    });
+  }
+
+  btnDownloadPng.addEventListener('click', function () {
+    anime({ targets: btnDownloadPng, scale: [1, 0.93, 1], duration: 320, easing: 'easeOutQuad' });
+    downloadPng();
+  });
 
   /* ── Цвета команд ─────────────────────────── */
 
@@ -1254,7 +1876,8 @@ btnMenu.addEventListener('click', function () {
           status: p.status,
           pos: p.pos ? { x: p.pos.x, y: p.pos.y } : null
         };
-      })
+      }),
+      drawings: drawings.map(cloneDrawingData)
     };
   }
 
@@ -1293,6 +1916,8 @@ btnMenu.addEventListener('click', function () {
     });
     savePlayers();
     ball.pos = snap.ball ? { x: snap.ball.x, y: snap.ball.y } : null;
+    drawings = (snap.drawings || []).map(cloneDrawingData);
+    renderDrawings();
 
     /* карточки исчезнувших игроков убираем, новые добавляем, раскладываем по спискам */
     var keep = {};
@@ -1591,8 +2216,32 @@ btnMenu.addEventListener('click', function () {
     return 's' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
   }
 
-  /* Игрок из пресета с подстановкой значений по умолчанию */
-  function normalizePresetPlayer(raw) {
+  /* Рисунок из пресета с подстановкой значений по умолчанию.
+      Некорректные записи отбрасываются, а не ломают загрузку. */
+  function normalizeDrawing(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    if (raw.type !== 'free' && raw.type !== 'arrow') return null;
+    if (!Array.isArray(raw.points)) return null;
+    var pts = raw.points.filter(function (p) {
+      return p && typeof p === 'object' && isFinite(p.x) && isFinite(p.y) &&
+        p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1;
+    }).map(function (p) {
+      return { x: Number(p.x), y: Number(p.y) };
+    });
+    if (pts.length < 2) return null;
+    var width = Number(raw.width);
+    if (!isFinite(width) || width < 2) width = 4;
+    width = Math.min(24, width);
+    return {
+      id: raw.id == null ? makeDrawId() : String(raw.id),
+      type: raw.type,
+      points: pts,
+      color: parseHex(raw.color) ? raw.color : '#ffffff',
+      width: width
+    };
+  }
+
+  /* Игрок из пресета с подстановкой значений по умолчанию */  function normalizePresetPlayer(raw) {
     if (!raw || typeof raw !== 'object') {
       return { id: makeId(), name: '', number: '', team: 'own', status: 'start', pos: null };
     }
@@ -1625,6 +2274,10 @@ btnMenu.addEventListener('click', function () {
       },
       /* в старых пресетах мяча нет — считаем, что мяча на поле нет */
       ball: validPos(raw.ball) ? { x: Number(raw.ball.x), y: Number(raw.ball.y) } : null,
+      /* в старых пресетах рисунков нет — считаем, что поле чистое */
+      drawings: Array.isArray(raw.drawings)
+        ? raw.drawings.map(normalizeDrawing).filter(function (d) { return !!d; })
+        : [],
       players: raw.players.map(normalizePresetPlayer)
     };
   }
@@ -1635,6 +2288,15 @@ btnMenu.addEventListener('click', function () {
       orientation: state.orientation,
       colors: { own: teamColors.own, opponent: teamColors.opponent },
       ball: ball.pos ? { x: round4(ball.pos.x), y: round4(ball.pos.y) } : null,
+      drawings: drawings.map(function (d) {
+        return {
+          id: d.id,
+          type: d.type,
+          points: d.points.map(function (pt) { return { x: round4(pt.x), y: round4(pt.y) }; }),
+          color: d.color,
+          width: d.width
+        };
+      }),
       players: players.map(function (p) {
         return {
           id: p.id,
@@ -1881,6 +2543,9 @@ btnMenu.addEventListener('click', function () {
       applyOrientation(false);
     }
 
+    drawings = (preset.drawings || []).map(cloneDrawingData);
+    renderDrawings();
+
     syncTokensToPlayers(animated);
     syncBall(animated);
     updateBallButton();
@@ -1907,14 +2572,16 @@ btnMenu.addEventListener('click', function () {
     var p = findPreset(currentPresetId);
     if (!p) return false;
     var snap = snapshotPreset();
-    return JSON.stringify([snap.orientation, snap.colors, snap.players]) !==
-      JSON.stringify([p.orientation, p.colors, p.players]);
+    return JSON.stringify([snap.orientation, snap.colors, snap.ball, snap.drawings, snap.players]) !==
+      JSON.stringify([p.orientation, p.colors, p.ball, p.drawings, p.players]);
   }
 
   function overwritePreset(p) {
     var snap = snapshotPreset();
     p.orientation = snap.orientation;
     p.colors = snap.colors;
+    p.ball = snap.ball;
+    p.drawings = snap.drawings;
     p.players = snap.players;
     p.savedAt = new Date().toISOString();
     currentPresetId = p.id;
@@ -2020,6 +2687,7 @@ btnMenu.addEventListener('click', function () {
         orientation: snapshot.orientation,
         colors: snapshot.colors,
         ball: snapshot.ball,
+        drawings: snapshot.drawings,
         players: snapshot.players
       };
       presets.push(preset);
