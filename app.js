@@ -133,12 +133,19 @@ function applyOrientation(animate) {
 }
 
 btnRotate.addEventListener('click', function () {
-  if (rotating) return;
+  /* при активной анимации или перетаскивании поворот недоступен */
+  if (rotating || drag) return;
   state.orientation = state.orientation === 'horizontal' ? 'vertical' : 'horizontal';
   storageSet('fb-board-orientation', state.orientation);
   applyOrientation(true);
 });
 
+/* Пересчёт поля при изменении размеров окна; ResizeObserver нужен
+   на случай, когда ширина меняется без ресайза окна — например,
+   при сворачивании боковой панели. */
+if (typeof ResizeObserver === 'function') {
+  new ResizeObserver(function () { fitField(); }).observe(fieldWrap);
+}
 window.addEventListener('resize', fitField);
 
 /* ── Боковая панель ────────────────────────── */
@@ -148,7 +155,6 @@ var sidebar = document.getElementById('sidebar');
 
 btnMenu.addEventListener('click', function () {
   sidebar.classList.toggle('collapsed');
-  var collapsed = sidebar.classList.contains('collapsed');
   anime({
     targets: btnMenu,
     scale: [1, 0.92, 1],
@@ -157,10 +163,9 @@ btnMenu.addEventListener('click', function () {
   });
 });
 
-  /* ── Инструменты (заготовка этапа 1) ───────── */
+  /* ── Инструменты ───────────────────────────── */
 
   var counter = document.getElementById('counter');
-  var count = 0;
 
   /* Мяч: позиция в долях 0–1 или null (мяча нет на поле) */
   var ball = { pos: null };
@@ -229,25 +234,33 @@ btnMenu.addEventListener('click', function () {
       value.x >= 0 && value.x <= 1 && value.y >= 0 && value.y <= 1;
   }
 
+  /* Восстанавливает игроков из хранилища. Повреждённые записи
+     отбрасываются, дубликаты id и номера приводятся в порядок,
+     иначе приложение стартует с пустыми составами. */
   function loadPlayers() {
     var raw = storageGet(PLAYERS_KEY);
     if (!raw) return;
     try {
       var parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        players = parsed
-          .filter(function (p) { return p && typeof p === 'object' && p.id && typeof p.name === 'string'; })
-          .map(function (p) {
-            return {
-              id: String(p.id),
-              name: String(p.name),
-              number: p.number == null ? '' : String(p.number),
-              team: p.team === 'opponent' ? 'opponent' : 'own',
-              status: p.status === 'bench' ? 'bench' : 'start',
-              /* позиция на поле в долях 0–1 (x — вдоль длины поля, y — вдоль ширины) */
-              pos: validPos(p.pos) ? { x: Number(p.pos.x), y: Number(p.pos.y) } : null
-            };
-          });
+        var seenIds = {};
+        players = [];
+        parsed.forEach(function (p) {
+          if (!p || typeof p !== 'object' || !p.id || typeof p.name !== 'string') return;
+          var np = {
+            id: String(p.id),
+            name: String(p.name).slice(0, 60),
+            number: normalizeNumber(p.number == null ? '' : String(p.number)),
+            team: p.team === 'opponent' ? 'opponent' : 'own',
+            status: p.status === 'bench' ? 'bench' : 'start',
+            /* позиция на поле в долях 0–1 (x — вдоль длины поля, y — вдоль ширины) */
+            pos: validPos(p.pos) ? { x: Number(p.pos.x), y: Number(p.pos.y) } : null
+          };
+          /* защита от дубликатов id в повреждённых данных */
+          while (seenIds[np.id]) np.id = makeId();
+          seenIds[np.id] = true;
+          players.push(np);
+        });
       }
     } catch (e) {
       players = [];
@@ -369,15 +382,6 @@ btnMenu.addEventListener('click', function () {
 
     li.addEventListener('pointerdown', onCardPointerDown);
 
-    editName.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') endEdit(p.id, true);
-      if (e.key === 'Escape') endEdit(p.id, false);
-    });
-    editNumber.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') endEdit(p.id, true);
-      if (e.key === 'Escape') endEdit(p.id, false);
-    });
-
     refreshCard(p, li);
     cardEls[p.id] = li;
     return li;
@@ -431,6 +435,7 @@ btnMenu.addEventListener('click', function () {
   function removePlayer(id) {
     var card = cardEls[id];
     var token = tokenEls ? tokenEls[id] : null;
+    if (card && card.classList.contains('removing')) return; /* удаление уже идёт */
     players = players.filter(function (p) { return p.id !== id; });
     savePlayers();
     pushHistory();
@@ -2002,12 +2007,14 @@ btnMenu.addEventListener('click', function () {
     if (historyIndex <= 0) return;
     historyIndex--;
     restoreSnapshot(history[historyIndex], true);
+    updateHistoryButtons();
   }
 
   function redoHistory() {
     if (historyIndex >= history.length - 1) return;
     historyIndex++;
     restoreSnapshot(history[historyIndex], true);
+    updateHistoryButtons();
   }
 
   /* Горячие клавиши: Cmd+Z / Cmd+Shift+Z (или Ctrl вместо Cmd) */
@@ -2299,7 +2306,7 @@ btnMenu.addEventListener('click', function () {
     return {
       id: raw.id == null ? makeId() : String(raw.id),
       name: typeof raw.name === 'string' ? raw.name : '',
-      number: raw.number == null ? '' : String(raw.number),
+      number: raw.number == null ? '' : normalizeNumber(String(raw.number)),
       team: raw.team === 'opponent' ? 'opponent' : 'own',
       status: raw.status === 'bench' ? 'bench' : 'start',
       pos: validPos(raw.pos) ? { x: Number(raw.pos.x), y: Number(raw.pos.y) } : null
@@ -2490,7 +2497,8 @@ btnMenu.addEventListener('click', function () {
           refreshCard(p);
           var dragging = drag && drag.type === 'token' && drag.id === p.id;
           if (animated && !dragging) {
-            moveDelay += 55;
+            /* задержка каскада ограничена, чтобы при 50+ игроках анимация не растягивалась */
+            moveDelay = Math.min(moveDelay + 55, 700);
             animateTokenTo(el, pos, 600, moveDelay, pxW, pxH);
           } else {
             el.style.left = (pos.u * 100) + '%';
@@ -2498,7 +2506,7 @@ btnMenu.addEventListener('click', function () {
           }
         } else {
           if (animated) {
-            springDelay += 80;
+            springDelay = Math.min(springDelay + 80, 1000);
             showToken(p, springDelay);
           } else {
             showToken(p);
@@ -2874,6 +2882,40 @@ btnMenu.addEventListener('click', function () {
       duration: 700
     }, '-=350');
 
+  /* ── Справка: окно «Как пользоваться» ──────── */
+
+  var HELP_KEY = 'fb-board-help-seen-v1';
+  var btnHelp = document.getElementById('btn-help');
+
+  function showHelp() {
+    var list = document.createElement('ul');
+    list.className = 'help-list';
+    [
+      'Добавление игроков: введите номер (обязательное поле) и при желании имя, выберите список и нажмите «Добавить».',
+      'Перетаскивание: тащите игрока из списка на поле. Двойной клик по кругу возвращает игрока в список.',
+      'Цвета: настройте цвета своей команды и соперника в разделе «Инструменты».',
+      'Схемы: кнопка «Схемы» расставляет основной состав по одной из готовых расстановок.',
+      'Пресеты: сохраняйте расстановки кнопкой «Сохранить как новый»; действия с ними — через клик по пресету; экспорт и импорт — в формате JSON.',
+      'Рисование: включите режим, выберите инструмент (линия, стрелка, ластик), цвет и толщину линии.',
+      'Отмена и повтор: кнопки «Отменить» и «Повторить» или Ctrl+Z и Ctrl+Shift+Z (Cmd на Mac).',
+      'PNG: кнопка «Скачать PNG» сохраняет текущий вид поля как изображение.'
+    ].forEach(function (item) {
+      var li = document.createElement('li');
+      li.textContent = item;
+      list.appendChild(li);
+    });
+    openModal({
+      title: 'Как пользоваться',
+      text: 'Краткая инструкция по основным возможностям доски.',
+      content: list,
+      buttons: [{ label: 'Понятно', className: 'primary' }]
+    });
+  }
+
+  btnHelp.addEventListener('click', function () {
+    showHelp();
+  });
+
   /* ── Экспорт и импорт пресетов ─────────────── */
 
   function exportPresets(list, label) {
@@ -3033,6 +3075,9 @@ btnMenu.addEventListener('click', function () {
 
   initTheme();
 
+  /* На узких экранах панель по умолчанию свёрнута, чтобы поле было видно */
+  if (window.innerWidth <= 720) sidebar.classList.add('collapsed');
+
   var savedOrientation = storageGet('fb-board-orientation');
   if (savedOrientation === 'vertical' || savedOrientation === 'horizontal') {
     state.orientation = savedOrientation;
@@ -3052,4 +3097,12 @@ btnMenu.addEventListener('click', function () {
   updateBallButton();
   pushHistory();
   updateHistoryButtons();
+
+  /* При первом запуске показываем краткую справку.
+     Флаг хранится в localStorage; файловая система или приватный
+     режим могут запрещать запись — тогда окно просто откроется снова. */
+  if (!storageGet(HELP_KEY)) {
+    showHelp();
+    storageSet(HELP_KEY, '1');
+  }
 })();

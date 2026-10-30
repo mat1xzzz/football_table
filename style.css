@@ -636,6 +636,10 @@ select.player-input {
   border-radius: 999px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
   white-space: nowrap;
+  /* очень длинное имя не должно вылезать за экран */
+  max-width: min(320px, 70vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drag-ghost.ghost-own {
@@ -1166,4 +1170,37 @@ select.player-input {
     z-index: 20;
     box-shadow: var(--shadow);
   }
+}
+
+/* Узкий тулбар: убираем подпись кнопки поворота, остаётся значок с подсказкой */
+@media (max-width: 560px) {
+  .toolbar {
+    padding: 0 10px;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    gap: 6px;
+  }
+
+  .app-title {
+    font-size: 15px;
+  }
+
+  #btn-rotate .btn-rotate-text {
+    display: none;
+  }
+}
+
+/* ── Окно справки ───────────────────────────── */
+
+.help-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
 }
