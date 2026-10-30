@@ -45,3 +45,4 @@ example
 # web app
 *.log
 Thumbs.db
+.idea/
