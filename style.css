@@ -163,7 +163,9 @@ body {
   border-radius: var(--radius);
   padding: 12px;
   box-shadow: var(--shadow);
-  overflow-x: hidden;
+  height: auto;        /* секция растёт по содержимому и не обрезает его */
+  overflow: visible;
+  flex-shrink: 0;      /* секции не сжимаются — прокручивается сама панель */
 }
 
 .panel-title {
@@ -184,10 +186,17 @@ body {
 .tool-grid .tool-btn {
   width: 100%;
   min-width: 0;
+  min-height: 36px;
   font-size: 12px;
   padding: 9px 6px;
   white-space: normal;
   text-align: center;
+  box-sizing: border-box;   /* длинный текст переносится, кнопка растёт по высоте */
+}
+
+/* Строки раздела «Информация» не сжимаются и видны полностью */
+.info-list li {
+  flex-shrink: 0;
 }
 
 .info-list {
@@ -215,6 +224,7 @@ body {
   color: var(--text-dim);
   text-align: center;
   padding: 6px 0 2px;
+  flex-shrink: 0;
 }
 
 /* ── Составы команд ─────────────────────────── */
@@ -591,11 +601,11 @@ select.player-input {
 
 /* --ball-size (диаметр мяча в px) задаёт app.js от ширины поля */
 .token-ball .ball-disc {
-  width: var(--ball-size, 26px);
-  height: var(--ball-size, 26px);
+  width: var(--ball-size, 52px);
+  height: var(--ball-size, 52px);
   border-radius: 50%;
   background: radial-gradient(circle at 33% 30%, #ffffff 0 52%, #d6d9de 100%);
-  border: calc(var(--ball-size, 26px) * 0.075) solid rgba(17, 24, 39, 0.65);
+  border: calc(var(--ball-size, 52px) * 0.075) solid rgba(17, 24, 39, 0.65);
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;

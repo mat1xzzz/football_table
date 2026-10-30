@@ -40,7 +40,7 @@ var PLAYER_REFERENCE_WIDTH = 1200;
 var PLAYER_RADIUS = 17 * 1.05 * 2 * 0.7;
 
 /* Диаметр мяча: тоже задан относительно ширины поля (эталон 1200) */
-var BALL_DIAMETER = 26;
+var BALL_DIAMETER = 52;
 
 var state = {
   orientation: 'horizontal' /* 'horizontal' | 'vertical' */
