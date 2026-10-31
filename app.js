@@ -2070,11 +2070,69 @@ btnMenu.addEventListener('click', function () {
     { name: '4-2-1-3 (4-3-3 с опорником)', lines: [1, 4, 2, 1, 3] },
     { name: '4-6-0 (ложная девятка)',      lines: [1, 4, 6] },
     { name: '3-2-4-1',                     lines: [1, 3, 2, 4, 1] },
-    { name: '2-3-5 (пирамида)',            lines: [1, 2, 3, 5] }
+    { name: '2-3-5 (пирамида)',            lines: [1, 2, 3, 5] },
+    /* четыре защитника */
+    { name: '4-1-2-2-1', lines: [1, 4, 1, 2, 2, 1] },
+    { name: '4-2-2-1-1', lines: [1, 4, 2, 2, 1, 1] },
+    { name: '4-1-1-2-2', lines: [1, 4, 1, 1, 2, 2] },
+    { name: '4-3-1-1-1', lines: [1, 4, 3, 1, 1, 1] },
+    { name: '4-1-3-1-1', lines: [1, 4, 1, 3, 1, 1] },
+    { name: '4-2-1-2-1', lines: [1, 4, 2, 1, 2, 1] },
+    { name: '4-1-1-3-1', lines: [1, 4, 1, 1, 3, 1] },
+    { name: '4-2-1-1-2', lines: [1, 4, 2, 1, 1, 2] },
+    { name: '4-1-5',     lines: [1, 4, 1, 5] },
+    /* три защитника */
+    { name: '3-1-3-3',   lines: [1, 3, 1, 3, 3] },
+    { name: '3-2-3-2',   lines: [1, 3, 2, 3, 2] },
+    { name: '3-3-3-1',   lines: [1, 3, 3, 3, 1] },
+    { name: '3-3-2-2',   lines: [1, 3, 3, 2, 2] },
+    { name: '3-2-2-3',   lines: [1, 3, 2, 2, 3] },
+    { name: '3-1-4-1-1', lines: [1, 3, 1, 4, 1, 1] },
+    { name: '3-2-5',     lines: [1, 3, 2, 5] },
+    { name: '3-3-1-3',   lines: [1, 3, 3, 1, 3] },
+    { name: '3-1-2-3-1', lines: [1, 3, 1, 2, 3, 1] },
+    { name: '3-1-3-2-1', lines: [1, 3, 1, 3, 2, 1] },
+    { name: '3-2-3-1-1', lines: [1, 3, 2, 3, 1, 1] },
+    { name: '3-1-2-1-3', lines: [1, 3, 1, 2, 1, 3] },
+    { name: '3-2-1-4',   lines: [1, 3, 2, 1, 4] },
+    { name: '3-1-3-1-2', lines: [1, 3, 1, 3, 1, 2] },
+    { name: '3-3-2-1-1', lines: [1, 3, 3, 2, 1, 1] },
+    /* пять защитников */
+    { name: '5-1-3-1',   lines: [1, 5, 1, 3, 1] },
+    { name: '5-2-2-1',   lines: [1, 5, 2, 2, 1] },
+    { name: '5-1-2-2',   lines: [1, 5, 1, 2, 2] },
+    { name: '5-1-4',     lines: [1, 5, 1, 4] },
+    { name: '5-1-2-1-1', lines: [1, 5, 1, 2, 1, 1] },
+    { name: '5-2-1-1-1', lines: [1, 5, 2, 1, 1, 1] },
+    { name: '5-1-1-3',   lines: [1, 5, 1, 1, 3] },
+    /* два защитника */
+    { name: '2-4-4',     lines: [1, 2, 4, 4] },
+    { name: '2-3-2-3',   lines: [1, 2, 3, 2, 3] },
+    { name: '2-5-3',     lines: [1, 2, 5, 3] },
+    { name: '2-3-3-2',   lines: [1, 2, 3, 3, 2] },
+    { name: '2-4-3-1',   lines: [1, 2, 4, 3, 1] },
+    { name: '2-2-3-3',   lines: [1, 2, 2, 3, 3] },
+    { name: '2-4-2-2',   lines: [1, 2, 4, 2, 2] },
+    { name: '2-3-4-1',   lines: [1, 2, 3, 4, 1] },
+    { name: '2-5-2-1',   lines: [1, 2, 5, 2, 1] },
+    { name: '2-3-1-4',   lines: [1, 2, 3, 1, 4] },
+    /* шесть защитников */
+    { name: '6-3-1',     lines: [1, 6, 3, 1] },
+    { name: '6-2-2',     lines: [1, 6, 2, 2] },
+    { name: '6-1-3',     lines: [1, 6, 1, 3] },
+    { name: '6-4-0',     lines: [1, 6, 4, 0] },
+    /* с либеро (один центральный защитник перед линией защиты) */
+    { name: '1-4-3-2 (либеро)', lines: [1, 1, 4, 3, 2] },
+    { name: '1-3-4-2 (либеро)', lines: [1, 1, 3, 4, 2] },
+    { name: '1-4-4-1 (либеро)', lines: [1, 1, 4, 4, 1] },
+    { name: '1-3-3-3 (либеро)', lines: [1, 1, 3, 3, 3] },
+    { name: '1-4-2-3 (либеро)', lines: [1, 1, 4, 2, 3] },
+    { name: '1-3-5-1 (либеро)', lines: [1, 1, 3, 5, 1] }
   ];
 
   /* Порядок карточек в окне «Схемы»: популярные показываются первыми,
-     остальные — в порядке объявления в FORMATIONS. */
+     затем остальные по возрастанию числа защитников (2, 3, 4, 5),
+     в конце — «другие» (с либеро и 6 защитниками). */
   var POPULAR_FORMATION_NAMES = ['4-4-2', '4-3-3', '3-5-2', '4-2-3-1', '5-3-2', '4-1-4-1', '3-4-3', '4-5-1'];
 
   function orderedFormations() {
@@ -2084,10 +2142,17 @@ btnMenu.addEventListener('click', function () {
         if (FORMATIONS[i].name === name) { popular.push(FORMATIONS[i]); return; }
       }
     });
-    var rest = FORMATIONS.filter(function (f) {
-      return POPULAR_FORMATION_NAMES.indexOf(f.name) < 0;
+    var groups = { d2: [], d3: [], d4: [], d5: [], other: [] };
+    FORMATIONS.forEach(function (f) {
+      if (POPULAR_FORMATION_NAMES.indexOf(f.name) >= 0) return;
+      var d = f.lines.length > 1 ? f.lines[1] : 0;
+      if (d === 2) groups.d2.push(f);
+      else if (d === 3) groups.d3.push(f);
+      else if (d === 4) groups.d4.push(f);
+      else if (d === 5) groups.d5.push(f);
+      else groups.other.push(f);
     });
-    return popular.concat(rest);
+    return popular.concat(groups.d2, groups.d3, groups.d4, groups.d5, groups.other);
   }
 
   var presets = [];        /* { id, name, savedAt, orientation, colors, players } */
@@ -2859,7 +2924,9 @@ btnMenu.addEventListener('click', function () {
      цвет своей команды. */
   function buildFormationPreview(counts) {
     var box = document.createElement('span');
-    box.className = 'formation-preview';
+    /* у схем с 5 и более полевыми рядами точки делают чуть меньше,
+       чтобы соседние ряды не сливались */
+    box.className = 'formation-preview' + (counts.length >= 6 ? ' formation-preview-dense' : '');
     formationSlots(counts).forEach(function (slot) {
       var dot = document.createElement('span');
       dot.className = 'formation-dot';
@@ -2873,13 +2940,15 @@ btnMenu.addEventListener('click', function () {
 
   /* ── Окно «Схемы»: поиск, фильтр по защитникам, сетка ── */
 
-  /* Фильтры по числу защитников (первый ряд после вратаря) */
+  /* Фильтры по числу защитников (первое число после вратаря).
+     «Другие» — схемы с либеро (1) и шестью защитниками (6). */
   var FORMATION_FILTERS = [
-    { id: 'all',   label: 'Все' },
-    { id: '3',     label: '3 в защите' },
-    { id: '4',     label: '4 в защите' },
-    { id: '5',     label: '5 в защите' },
-    { id: 'other', label: 'Другие' }
+    { id: 'all',   label: 'Все',    title: 'Все схемы' },
+    { id: '2',     label: '2',      title: '2 защитника' },
+    { id: '3',     label: '3',      title: '3 защитника' },
+    { id: '4',     label: '4',      title: '4 защитника' },
+    { id: '5',     label: '5',      title: '5 защитников' },
+    { id: 'other', label: 'Другие', title: 'С либеро (1) и 6 защитниками' }
   ];
 
   function defendersOf(f) {
@@ -2889,7 +2958,7 @@ btnMenu.addEventListener('click', function () {
   function matchesFormationFilter(f, filterId) {
     if (filterId === 'all') return true;
     var d = defendersOf(f);
-    if (filterId === 'other') return d !== 3 && d !== 4 && d !== 5;
+    if (filterId === 'other') return d !== 2 && d !== 3 && d !== 4 && d !== 5;
     return d === Number(filterId);
   }
 
@@ -2906,10 +2975,19 @@ btnMenu.addEventListener('click', function () {
     return cardBtn;
   }
 
+  /* Карточки рендерятся пачками: сразу первые 20, остальные подгружаются
+     при приближении к концу списка (IntersectionObserver по разделителю),
+     чтобы окно с 80+ схемами открывалось без задержки. */
+  var FORMATION_BATCH = 20;
+
   function openFormationsModal() {
     var ctx = null;
     var ordered = orderedFormations();
     var activeFilter = 'all';
+    var visibleList = [];  /* карточки, найденные после фильтрации */
+    var renderedCount = 0; /* сколько карточек уже в DOM */
+    var sentinelEl = null;
+    var batchObserver = null;
 
     var content = document.createElement('div');
     content.className = 'formation-panel';
@@ -2917,8 +2995,11 @@ btnMenu.addEventListener('click', function () {
     var search = document.createElement('input');
     search.type = 'text';
     search.className = 'player-input formation-search';
-    search.placeholder = 'Поиск по названию схемы';
+    search.placeholder = 'Поиск по названию (например, «4-2»)';
     search.setAttribute('aria-label', 'Поиск по названию схемы');
+
+    var countEl = document.createElement('p');
+    countEl.className = 'formation-count';
 
     var filters = document.createElement('div');
     filters.className = 'formation-filters';
@@ -2928,6 +3009,7 @@ btnMenu.addEventListener('click', function () {
       btn.className = 'tool-btn formation-filter-btn' + (flt.id === activeFilter ? ' active' : '');
       btn.textContent = flt.label;
       btn.dataset.filter = flt.id;
+      if (flt.title) btn.title = flt.title;
       btn.addEventListener('click', function () {
         activeFilter = flt.id;
         filters.querySelectorAll('.formation-filter-btn').forEach(function (b) {
@@ -2938,7 +3020,7 @@ btnMenu.addEventListener('click', function () {
       filters.appendChild(btn);
     });
 
-    /* прокрутка внутри окна: 30 карточек не растягивают окно в простыню */
+    /* прокрутка внутри окна: карточки не растягивают окно в простыню */
     var scroll = document.createElement('div');
     scroll.className = 'formation-scroll';
 
@@ -2949,27 +3031,66 @@ btnMenu.addEventListener('click', function () {
     var empty = document.createElement('p');
     empty.className = 'formation-empty';
     empty.hidden = true;
-    empty.textContent = 'Схема не найдена';
+    empty.textContent = 'Схема не найдена. Измените запрос или фильтр.';
     scroll.appendChild(empty);
 
     content.appendChild(search);
     content.appendChild(filters);
+    content.appendChild(countEl);
     content.appendChild(scroll);
 
-    function renderGrid() {
-      grid.innerHTML = '';
-      var query = search.value.trim().toLowerCase();
-      var shown = 0;
-      ordered.forEach(function (f) {
-        if (query && f.name.toLowerCase().indexOf(query) < 0) return;
-        if (!matchesFormationFilter(f, activeFilter)) return;
-        shown++;
+    function dropBatchObserver() {
+      if (batchObserver) {
+        batchObserver.disconnect();
+        batchObserver = null;
+      }
+      sentinelEl = null;
+    }
+
+    function updateCount() {
+      if (!visibleList.length) {
+        countEl.textContent = '';
+        return;
+      }
+      var text = 'Найдено схем: ' + visibleList.length;
+      if (renderedCount < visibleList.length) text += ' (показано ' + renderedCount + ')';
+      countEl.textContent = text;
+    }
+
+    function appendBatch() {
+      dropBatchObserver();
+      var batch = visibleList.slice(renderedCount, renderedCount + FORMATION_BATCH);
+      renderedCount += batch.length;
+      batch.forEach(function (f) {
         grid.appendChild(buildFormationCard(f, function () {
           ctx.close();
           doApplyFormation(f);
         }));
       });
-      empty.hidden = shown > 0;
+      updateCount();
+      if (renderedCount < visibleList.length) {
+        sentinelEl = document.createElement('div');
+        sentinelEl.className = 'formation-sentinel';
+        grid.appendChild(sentinelEl);
+        batchObserver = new IntersectionObserver(function (entries) {
+          if (entries.some(function (e) { return e.isIntersecting; })) appendBatch();
+        }, { root: scroll, rootMargin: '240px' });
+        batchObserver.observe(sentinelEl);
+      }
+    }
+
+    function renderGrid() {
+      dropBatchObserver();
+      grid.innerHTML = '';
+      renderedCount = 0;
+      var query = search.value.trim().toLowerCase();
+      visibleList = ordered.filter(function (f) {
+        if (query && f.name.toLowerCase().indexOf(query) < 0) return false;
+        return matchesFormationFilter(f, activeFilter);
+      });
+      empty.hidden = visibleList.length > 0;
+      updateCount();
+      appendBatch();
     }
 
     search.addEventListener('input', renderGrid);
